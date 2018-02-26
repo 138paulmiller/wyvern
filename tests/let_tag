@@ -1,0 +1,4 @@
+(let func ([a 10] [b 4]) 
+	(display (* a b))(newline)
+	(if (> a 0)
+		(func (- a  1) b)))

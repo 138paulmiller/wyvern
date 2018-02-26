@@ -1,0 +1,212 @@
+Grammer Taken from r7rs
+
+***************Program and Definitions*********************
+<program> ::= <import declaration>+ <command or definition>+
+
+<command or definition> ::= <command>
+	| <definition>
+	| (begin <command or definition>+ )
+
+<definition> ::= (define <identifier> <expression> )
+	| ( define (<identifier> <def formals>) <body> )
+	| <syntax definition>
+	| ( define-values <formals> <body> ) 
+	| ( define-record-type <identifier> <constructor> <identifier> <field spec>* )
+	| ( begin <definition>* )
+
+<def formals> ::= <identifier>*
+	| <identifier>* . <identifier>
+
+<constructor> ::=(<identifier> <field name>* ) 
+
+<field spec> ::= ( <field name> <accessor> )
+	| ( <field name> <accessor> <mutator> )
+
+<field name> ::= <identifier>
+
+
+**************Datum***************************
+
+<datum> ::= <simple datum> 
+	| <compound datum>
+	| <label>=<datum> 
+	| <label>#
+
+<simple datum> ::=<boolean> 
+	| <character> 
+	| <number>
+	| <string>
+
+	| <symbol> 
+	| <bytevector>
+
+<symbol> ::= <identifier>
+
+<compound datum> ::= <list> 
+	| <vector> 
+	| <abbreviation>
+
+<list> <(<datum>*)
+	|(<datum>+. <datum>)
+
+<abbreviation> ::= <abbrev prefix> <datum>
+<abbrev prefix> < ’
+	|`
+	|,
+	|,@
+<vector> ::= #(<datum>*)
+<label> ::= #<uinteger 10>
+
+
+
+***************Expressions*********************
+
+<expression>  ::= <identifier> //symbol
+	| <literal> 
+	| <procedure call>  //(expr expr)
+	| <lambda expression> //lambda 
+	| <conditional> //if
+	| <assignment> //set!
+	| <derived expression> 
+
+//May add later
+	| <macro use>  
+	| <macro block>  
+	| <includer>  
+
+<literal> < <quotation> 
+	| <self-evaluating>
+
+<self-evaluating> ::= <boolean> 
+	| <character> 
+	| <number> //
+	| <string> 
+	| <vector>
+	| <bytevector>
+
+<quotation> ::= ’<datum> 
+	| (quote <datum> )
+
+<procedure call> ::= ( <operator> <operand> * )
+
+<operator> ::= <expression>
+
+<operand> ::= <expression>
+
+
+<lambda expression> ::= (lambda <formals> <body> )
+
+<formals> ::=( <identifier> * )
+	| <identifier>
+	| ( <identifier>+ . <identifier> )
+
+<body> ::= <definition>* <sequence>
+
+<sequence> ::=<command>* <expression>
+
+<command> ::= <expression>
+
+<conditional>  ::= (if test <consequent> <alternate> )
+
+<test> ::= <expression>
+
+<consequent>::= < expression>
+
+<alternate> ::=< expression> | <empty>
+
+<assignment> ::= (set! <identifier> <expression> )
+
+//Definitions for the derived types can be found on section 7.3. Derived expression types of the r7rs
+<derived expression> ::= 
+	| (cond <cond clause>+ ) 
+	| (cond <cond clause>* (else <sequence> ))
+	| (case <expression> <case clause>+ )
+	| (case <expression> <case clause> * (else <sequence> ))
+	| (case <expression> <case clause>* (else => <recipient> ))
+	| (and <test>* )
+	| (or <test>* )
+	| (when <test> <sequence> )
+	| (unless <test> <sequence> )
+	| (let ( <binding spec>* ) <body> )
+	| (let <identifier> ( <binding spec> * ) <body> )
+	| (let* ( <binding spec>* ) <body> )
+	| (letrec ( <binding spec>* ) <body> )
+	| (letrec* ( <binding spec>* ) <body> )
+	| (let-values ( <mv binding spec>* ) <body> )
+	| (let*-values ( <mv binding spec>* ) <body> )
+	
+	| (begin <sequence> )
+	| (do ( <iteration spec>* ) ( <test> <do result> ) <command>* )
+	| (delay <expression> )
+	| (delay-force <expression> )
+	| (parameterize (( <expression> <expression> )* ) <body> )
+	| (guard ( <identifier> <cond clause>* ) <body> )
+	| <quasiquotation>
+	| (case-lambda <case-lambda clause>* )
+
+
+<cond clause> ::= ( <test> <sequence> )
+	| ( <test> )
+	| ( <test> => <recipient> )
+
+<recipient> ::= <expression>
+
+<case clause> ::=  (( <datum>* ) <sequence> )
+				| (( <datum>* ) => <recipient> )
+
+<binding spec>::= (<identifier> <expression>)
+
+<mv binding spec>::= (<formals> <expression>)
+
+<iteration spec>::=(<identifier><init><step>)
+	|(<identifier><init>)
+
+<case-lambda clause> ::= <(<formals><body>)
+
+<init> ::=<expression>
+
+<step> ::=<expression>
+
+<do result>::=<sequence>| <empty>
+
+
+//D ensures that quotes and unquotes are balanced, this can be acheived in a Parse tree pass since the following productions are not context free
+<quasiquotation> ::= <quasiquotation 1>
+
+<qq template 0> ::= <expression>
+<quasiquotation D> ::= 
+		`<qq template D>
+		|(quasiquote <qq template D>)
+
+
+<qq template D> ::= 
+	<simple datum>
+	| <list qq template D>
+	| <vector qq template D>
+	| <unquotationD>
+
+<list qq template D> ::=
+
+	(<qq template or splice D>*)
+	|( <qq template or splice D>+ . <qq template D> )
+	| ’<qq template D>
+	| <quasiquotation D+1>
+
+
+<vector qq template D> ::=
+	#(<qq template or splice D>*)
+
+
+<unquotationD> ::=
+	,<qq template D−1>
+	|(unquote <qq template D−1> )
+
+
+<qq template or splice D> ::= 
+	<qq template D>
+	| <splicing unquotationD> 
+
+<splicing unquotationD> ::=
+	,@<qq template D−1>
+	|( unquote-splicing <qq template D−1> )
+

@@ -1,0 +1,15 @@
+(cond 
+	((< a b ) 
+		(cond 
+			(a (display "a"))
+
+			(else (display "else"))
+		))
+	(else
+		(cond 
+			(a (display "a"))
+
+			(else (display "else"))
+		))
+
+)

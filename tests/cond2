@@ -1,0 +1,18 @@
+(cond 
+	((* a b ) 
+		(display "A"))
+	(b 
+		(display "B"))
+	(else
+		(display "neither"))
+)
+(cond 
+	(a 
+		(display "A"))
+	(b =>
+		display)
+	(else 
+		(display "neither"))
+)
+
+(function args 1 2 3)

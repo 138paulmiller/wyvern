@@ -1,0 +1,5 @@
+(and (first)
+		(and #f 
+			(cond 
+			(#t (call (cond (a "Hello")  ))
+))))

@@ -1,0 +1,5 @@
+(define a 100)
+(cond 
+	((> a 10)  (let *b ((i 10))
+					(if (> i 0)
+						(let* ([a "Hello"] [b " world!"]) (display a)(display b) (*b (- i 1))  )) )))

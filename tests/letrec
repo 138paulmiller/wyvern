@@ -1,0 +1,24 @@
+(letrec* 
+		([a 3]
+		[b 3]
+		[c (lambda () (* a b)) ])
+	(c)
+)
+
+(letrec ([sum (lambda (x)
+             (if (zero? x)
+                 0
+                 (+ x (sum (- x 1)))))])
+   (sum 5))
+
+
+(letrec* ([sum (lambda (x)
+            (if (zero? x)
+                    0
+                (+ x (sum (- x 1)))))]
+         [f (lambda () (cons n n-sum))]
+         [n 15]
+         [n-sum (sum n)])
+  (f))
+
+

@@ -1,0 +1,23 @@
+(cond 
+	(a 
+		true)
+	(b 
+		againtrue)
+)
+
+
+(cond 
+	(a 
+		true)
+	(b 
+		(and alsotrue
+		(cond 
+			(#t (call "Hello"))
+		)))
+	(c 
+		againtrue)
+	(else
+		nottrue)
+)
+
+(let* ((a 4) (b  (* a 3) ) ) (* b a) (display (* a b)) )
