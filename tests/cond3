@@ -1,5 +1,14 @@
-(and (first)
-		(and #f 
-			(cond 
-			(#t (call (cond (a "Hello")  ))
-))))
+(define a 10)
+(cond 
+	[(= a 1) (display "ONE") ]
+	[(= a 2) (display "TWO") ]
+	[(= a 3) (display "THREE") ]
+	[(= a 4) (display "FOUR") ]
+	[(= a 5) (display "FIVE") ]
+	(else 
+		(cond 
+			((> a 0)  => display  ) 
+			((< a 0)  => display  )) 
+		(display "\nDONE")))
+
+(display (cond ("HELLOWORLD")))

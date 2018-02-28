@@ -7,8 +7,8 @@ OBJ_DIR = obj
 OUT = wyvern
 OBJS = $(patsubst %, $(OBJ_DIR)/%.o, $(notdir $(basename $(SRC))))
 
-
-.PHONY : $(OBJS)
+#Always depend even if exists
+#.PHONY : $(OBJS)
 
 all: $(OBJS)
 	$(CC) $^ -o $(OUT)
@@ -20,4 +20,4 @@ rebuild: clean all
 	@echo ""
 
 clean: 
-	-rm obj/* || rm $(OUT) rm || generated/*
+	-rm obj/* || rm $(OUT)

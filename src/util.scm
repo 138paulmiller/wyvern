@@ -15,7 +15,7 @@
 			(current-input-port))))
 		(lambda ()
 				(if (not try_file)
-							(display "~>"))
+							(display ""))
 					(read port))))
 
 
