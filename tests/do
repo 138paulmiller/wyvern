@@ -1,7 +1,6 @@
 (do (
 	(i 0 (+ i 1))
 	)
-	;test exprs to run after pass...
     ((> i 5) (display "\nDONE")(newline))      
   (newline)
   (display "Command")(display i)

@@ -10,7 +10,6 @@
 		(let* (	(expr (reader)))
 			(cond ( (not (eof-object? expr))
 				(let ((result-expr (desugar expr))) 
-				;(display "\nRES:")
 				(display result-expr)(newline)
 				(repl))))))
 (repl )

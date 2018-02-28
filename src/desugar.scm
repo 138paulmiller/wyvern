@@ -8,26 +8,24 @@
  		)))
 
 (define (desugar root)
-	 (desugar-begin
-	 (desugar-let-values* 
-	 (desugar-let-values
-	; (desugar-letrec*
-	; (desugar-letrec
-	; (desugar-let* 
-	; (desugar-let 
-	; (desugar-or
-	; (desugar-and 
-	; (desugar-cond 
-	; (desugar-case
-	; (desugar-unless
-	; (desugar-when 
+	(desugar-begin
+	(desugar-let-values* 
+	(desugar-let-values
+	(desugar-letrec*
+	(desugar-letrec
+	(desugar-let* 
+	(desugar-let 
+	(desugar-or
+	(desugar-and 
+	(desugar-cond 
+	(desugar-case
+	(desugar-unless
+	(desugar-when 
 	(desugar-do
 	(desugar-brackets	
 	(desugar-quote-strings 
 		root
-	)))))))
-;;)))))))))))
-
+	)))))))))))))))))
 ;
 
 ; condition			x
@@ -41,11 +39,11 @@
 ; let*    			x
 ; letrec  			x
 ; letrec*  			x
-; let-values  		?
-; let*-values 		?
+; let-values  		x
+; let*-values 		x
 ; begin  			x	
 ; do  				
-; delay 
+; delay 			
 ; delay-force 		
 ; parameterize  	
 ; case-lambda		
@@ -59,7 +57,7 @@
 			(match root    
 				( ( [ expr ... ] )  
 					`(,expr))
-				(_  root))))
+				(_ root))))
 			(if (pair? node)
 				(append (list (desugar-brackets (car node))) (desugar-brackets (cdr node)))
 				node)))
@@ -251,8 +249,6 @@
 ;
 ;helper to create temp name
 (define (get-temp-symbol var)
-	(display var)
-	(read-line)
 	(string->symbol (string-append "___" (symbol->string var) "___" )))
 
 (define (desugar-letrec root)	
@@ -480,9 +476,7 @@
 (define (desugar-do root)	
 	(let ( (node 
 			(match root    
-
 				(('do ((vars inits steps ...) ...) (test exprs ...) commands ...)
-					(display vars)(read-line)(display inits)(read-line)(display steps)(read-line)
 					`(letrec
 						((loop
 							(lambda (,@vars)
@@ -570,8 +564,8 @@
 								     '()  vals)))
 						`((lambda ,record-names
 							,(desugar-let `(let ,bindings
-								,@(desugar-let-values* body))))
-						,@(desugar-let-values* exprs) )))
+								,@(desugar-let-values body))))
+						,@(desugar-let-values exprs) )))
 				(_  root))))
 			(if (pair? node)
 				(append (list (desugar-let-values (car node))) (desugar-let-values (cdr node)))
@@ -589,7 +583,7 @@
 (define (desugar-let-values* root)
 	(let ( (node 
 			(match  root
-				(('let-values ((vals exprs) ...) body ...)
+				(('let-values* ((vals exprs) ...) body ...)
 					;create the value proc "getter"
 					(let* ( 
 							;get all record names, wrap proc in lambda that takes an arg
