@@ -8,24 +8,25 @@
  		)))
 
 (define (desugar root)
-	(desugar-begin
-	(desugar-let-values* 
-	(desugar-let-values
-	(desugar-letrec*
-	(desugar-letrec
-	(desugar-let* 
-	(desugar-let 
-	(desugar-or
-	(desugar-and 
-	(desugar-cond 
-	(desugar-case
-	(desugar-unless
-	(desugar-when 
+	; (desugar-begin
+	; (desugar-let-values* 
+	; (desugar-let-values
+	; (desugar-letrec*
+	; (desugar-letrec
+	; (desugar-let* 
+	; (desugar-let 
+	; (desugar-or
+	; (desugar-and 
+	; (desugar-cond 
+	; (desugar-case
+	; (desugar-unless
+	; (desugar-when 
 	(desugar-do
 	(desugar-brackets	
 	(desugar-quote-strings 
 		root
-	)))))))))))))))))
+	))))
+;)))))))))))))
 ;
 
 ; condition			x
@@ -422,7 +423,7 @@
 			(match  root
 				( ('case (expr ... ) clauses ...)  
 					`((lambda (__atom-key__) 
-						,(desugar-case '(case __atom-key__ ,clauses)))
+						,(desugar-case `(case __atom-key__ ,@clauses)))
 					,(desugar-case expr)))
 
 				( ('case key ('else '=> result ) ...)  
@@ -454,7 +455,7 @@
 				node)))
 
 
-;do TODO !!!!!
+;do 
 ; ((do ((var init step ...) ...) (test expr ...) command ...)
 ; 	(letrec
 ; 		((loop
@@ -476,7 +477,7 @@
 (define (desugar-do root)	
 	(let ( (node 
 			(match root    
-				(('do ((vars inits steps ...) ...) (test exprs ...) commands ...)
+				(('do ((vars inits steps ) ...) (test exprs ...) commands ...)
 					`(letrec
 						((loop
 							(lambda (,@vars)
@@ -486,7 +487,7 @@
 									,@exprs )
 								(begin
 									,@commands
-									,`(loop ,@(desugar-do `(do step ,vars ,@steps) ))
+									,`(loop ,@(desugar-do `(do step ,vars ,steps )))
 									)))))
 						(loop ,@inits )))
 				(('do 'step x)
