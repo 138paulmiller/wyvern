@@ -1,72 +1,148 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;	Desugar 
+;	@author Paul Miller 2018
+;	Reconstructs Scheme Expressions into primitive expressions 
+;---------------------------------------------------------------------------------------------;; 	
+;	Derived Expressions 
+;---------------------------------------------------------------------------------------------;
+; 	cond			
+; 	case 						
+; 	and 				
+; 	or  				
+; 	when    			
+; 	unless 			
+; 	let     			
+; 	let*    			
+; 	letrec  			
+; 	letrec*  			
+; 	let-values  		
+; 	let*-values 		
+; 	begin  				
+; 	do  				
+; 	delay 			
+; 	delay-force 
+;	quoted-expressions TODO		
+; 	parameterize  	TODO
+; 	case-lambda		TODO
+; 	guard  			TODO
+; 	quasiquotation 	TODO
+;---------------------------------------------------------------------------------------------;
+;	Ur-Scheme
+;---------------------------------------------------------------------------------------------;
+;	lambda	
+;	car
+; 	cdr
+;	quote
+; 	set!
+;	if
+;	force
+;	memv
+;	list
+;	vector
+;	valuen-i
+;	values
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (declare (unit desugar))
 (use srfi-1)
 (require-extension matchable)
 (require-extension r7rs)
-(define (syntax-error msg)
- 	(call/cc (lambda (e)
- 			(display msg)
- 		)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar  
+;---------------------------------------------------------------------------------------------;
+;	Reconstructs an expression using only primitives
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (desugar root)
-	; (desugar-begin
-	; (desugar-let-values* 
-	; (desugar-let-values
-	; (desugar-letrec*
-	; (desugar-letrec
-	; (desugar-let* 
-	; (desugar-let 
-	; (desugar-or
-	; (desugar-and 
-	; (desugar-cond 
-	; (desugar-case
-	; (desugar-unless
-	; (desugar-when 
+	(desugar-delay
+	(desugar-delay-force
+	(desugar-begin
+	(desugar-let-values* 
+	(desugar-let-values
+	(desugar-letrec*
+	(desugar-letrec
+	(desugar-let* 
+	(desugar-let 
+	(desugar-or
+	(desugar-and 
+	(desugar-cond 
+	(desugar-case
+	(desugar-unless
+	(desugar-when 
 	(desugar-do
 	(desugar-brackets	
-	(desugar-quote-strings 
-		root
-	))))
-;)))))))))))))
-;
+	(desugar-strings 
+	root)))))))))))))))))))
 
-; condition			x
-; quasiquotation 	?
-; case 				x			
-; and 				x
-; or  				x
-; when    			x
-; unless 			x
-; let     			x
-; let*    			x
-; letrec  			x
-; letrec*  			x
-; let-values  		x
-; let*-values 		x
-; begin  			x	
-; do  				
-; delay 			
-; delay-force 		
-; parameterize  	
-; case-lambda		
-; guard  			?
-; define			?
+;;Unused for now
+(define (syntax-error msg)
+ 	(call/cc (lambda (e)
+ 			(display msg))))
 
-;brackets
-; [expr...] ==> (expr ... )
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; template-desugar  
+;---------------------------------------------------------------------------------------------;
+;	Recursively reconstruct an expression by using the production
+;	given by the caller, and calls the caller for each sub-expression. 
+;	To be used by all desugar expression to offload the recursively
+;	handling all sub expressions
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		caller 		: the proc that performs the reconstruction 
+;		production 	: the reconstructed expression
+;	return:
+;		new formed expression
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (template-desugar caller production)
+	(let ( (node production ))
+			(if (pair? node)
+				(append (list  (caller (car node))) 
+						( caller (cdr node)))
+				node)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-brackets  
+;---------------------------------------------------------------------------------------------;
+; Transforms all instances of bracket wrapped expressions into 
+;	expressions wrapped with parentheses 
+;	E.g. [ expr+ ] => ( expr+ )   
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-brackets root)	
-	(let ( (node 
-			(match root    
+	(template-desugar 
+			desugar-brackets
+			(match root
 				( ( [ expr ... ] )  
 					`(,expr))
 				(_ root))))
-			(if (pair? node)
-				(append (list (desugar-brackets (car node))) (desugar-brackets (cdr node)))
-				node)))
 
-; strings - any string objects read by (read) will be wrapped with quotes
-;wrap any strings with quotes
-(define (desugar-quote-strings root)
-	(let ( (node 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-strings
+;---------------------------------------------------------------------------------------------;
+; Any string objects returned by read will not be wrapped with quotes 
+; and will return any escaped chars with the backslash. 
+; This procedure will wrap quotes around any string objects read 
+; with quotes and escape any characters  
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-strings root)
+	(template-desugar 
+			desugar-strings
 			(if (string? root)
 				(string-append "\"" 
 					(fold-right 
@@ -82,34 +158,41 @@
 						"" (string->list root) ) 
 					"\"")
 				root)))
-			(if (pair? node)
-				(append (list (desugar-quote-strings (car node))) (desugar-quote-strings (cdr node)))
-				node)))
 
 
-
-;begin
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-begin
+;---------------------------------------------------------------------------------------------;
+; Expresses begin according to the following:
 ; (begin  expr) 
-;	((lambda () expr ))
-(define (desugar-begin root)	
-	(let ( (node 
+;	((lambda () expr )) 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-begin root)
+	(template-desugar 
+			desugar-begin
 			(match root    
 				( ('begin body ...  )  
 					`((lambda  () ,@body)))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-begin  (car node))) (desugar-begin (cdr node)))
-				node)))
 
-;condition 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-cond
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((cond (else body ...))
 ; 		(begin body ...)) 
-
+;
 ; ((cond (test => result))
 ; 	(let ((temp test))
 ; 		(if temp 
 ;			(result temp)))) 
-
+;
 ; ((cond (test => result) clauses...)
 ; 	(let ((temp test))
 ; 		(if temp
@@ -117,23 +200,30 @@
 ; 			(cond clauses ...))))
 ; ((cond (test))
 ;	=> test)
-
+;
 ; ((cond (test) clauses ...)
 ; 	(let ((temp test))
 ; 		(if temp
 ; 			temp
 ; 			(cond clauses ...))))
-
+;
 ; ((cond (test body ...))
 ; 	(if test (begin body ...)))
-
+;
 ; ((cond (test body ...) clauses ...)
 ;	(if test
 ; 		(begin body ...)
 ; 		(cond clauses ...)))
-
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-cond root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-cond
 			(match root    
 				( ('cond ('else body ...))
 					`(begin ,@(desugar-cond body)))
@@ -173,22 +263,29 @@
 				(_  
 					root
 				))))
-			(if (pair? node)
-				(append (list (desugar-cond (car node))) (desugar-cond (cdr node)))
-			node)))
-
-;let
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-let
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; (let ((var expr) ... (varN exprN)) body )
-;	==> ((lambda (var... varN ) body  ) expr ... exprN)
-; Tagged let
+; 	((lambda (var... varN ) body  ) expr ... exprN)
+; 
 ; (let tag ((vars exprs) ...) body ...)
-; ==> ((letrec ( 
+; 	((letrec ( 
 ; 			(tag (lambda (vars )
 ; 						body )))
 ; 		tag)
 ; 			exprs ...)
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-let root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-let
 			(match root    
 				( ( 'let ( (vars exprs) ...  ) body ... )  
 					;ensure that vars are all symbols?
@@ -205,19 +302,24 @@
 				(_  
 					root
 				))))
-			(if (pair? node)
-				(append (list (desugar-let (car node))) 
-						(desugar-let (cdr node)))
-			node)))
-
-
-;let*
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-let*
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; (let* ((var expr) ... (varN exprN)) body )
 ;	==> ((lambda (var ) 
 ;			(let* (... varN ) 
 ;					body )  ... exprN ) expr)
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-let* root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-let*
 			(match root    
 				( ( 'let* ( bindings ...  ) body ... )  
 					;if reached base, just return desugared body			
@@ -231,15 +333,31 @@
 								,@(cdar bindings))
 					))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-let* (car node))) 
-						(desugar-let* (cdr node)))
-			node)))
 
-;letrec
-;	https://www.cs.indiana.edu/~dyb/pubs/fixing-letrec.pdf
-;`(letrec ,((vars exprs)...) body ... ) 
-; ==> `((lambda vars  
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; get-temp-symbol
+;---------------------------------------------------------------------------------------------;
+; desugar-letrec helper to create nonrandom names for temporary symbols 
+;	for a given symbol
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		var : symbol to create temp name for
+;	return:
+;		temporary symbol 		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (get-temp-symbol var)
+	(string->symbol (string-append "___" (symbol->string var) "___" )))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-letrec
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;	From https://www.cs.indiana.edu/~dyb/pubs/fixing-letrec.pdf
+; (letrec ,((vars exprs)...) body ... ) 
+; 	((lambda vars  
 ; 		((lambda ( temp1  ... tempn )  
 ; 			(set! var1 temp1)
 ;				...
@@ -248,12 +366,15 @@
 ; 			expr1 ... exprN) )
 ;				 #f ... #f)
 ;
-;helper to create temp name
-(define (get-temp-symbol var)
-	(string->symbol (string-append "___" (symbol->string var) "___" )))
-
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-letrec root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-letrec
 			(match root    
 				( ( 'letrec ( (vars exprs) ...  ) body ... )  
 					`((lambda ,vars  
@@ -264,21 +385,28 @@
 						,@(map (lambda (expr) #f) exprs )
 					))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-letrec (car node))) 
-						(desugar-letrec (cdr node)))
-			node)))
 
-;letrec*
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-letrec*
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((letrec* ((vars exprs) ...) body ...)
-; 	==>	( ( lambda  (var1  ... varn )
-; 			(set! var1 expr1)
-;			...
-; 			(set! varn exprn)
-; 			 body )
-;				 #f .. #f  )
+; 	( ( lambda  (var1  ... varn )
+; 		(set! var1 expr1)
+;		...
+; 		(set! varn exprn)
+; 		 body )
+;			 #f .. #f  )
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-letrec* root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-letrec*
 			(match root    
 				( ( 'letrec* ( bindings ...  ) body ... )  
 					(desugar-let* 
@@ -288,13 +416,12 @@
 							,@(map  (lambda(binding) `(set! ,@binding )) bindings)
 					 		,@body)))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-letrec* (car node))) 
-						(desugar-letrec* (cdr node)))
-			node)))
 
-
-; and
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-and
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((and)
 ;	 	#t)
 ; ((and test) 
@@ -303,8 +430,16 @@
 ; 		(if test1 
 ;			(and tests) 
 ;			#f))))
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-and root)
-	(let ( (node 
+	(template-desugar 
+			desugar-and
 			(match  root
 				(('and) 
 				 	#t)
@@ -318,12 +453,13 @@
 						#f))
 
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-and (car node))) (desugar-and (cdr node)))
-				node)))
 
 
-; or
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-or
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+; 
 ; ((or) 
 ;		#f)
 ; ((or test)
@@ -333,9 +469,16 @@
 ; 	(if x 
 ;		x 
 ;		(or test2 ...))))
-
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-or root)
-	(let ( (node 
+	(template-desugar 
+			desugar-or
 			(match  root
 				(('or) 
 				 	#f)
@@ -351,44 +494,62 @@
 					,(desugar-or test) ))
 
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-or (car node))) (desugar-or (cdr node)))
-				node)))
 
-
-; when
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-when
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((when test body ...)
 ; 	(if test
 ; 		(begin body ...)))
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-when root)
-	(let ( (node 
+	(template-desugar 
+			desugar-when
 			(match  root
 				( ('when test body ...)  
 					`(if ,(desugar-when test)
 						,`(begin ,@(desugar-when body))))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-when (car node))) (desugar-when (cdr node)))
-				node)))
 
 
-
-; unless
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-unless
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+; 
 ; ((unless test body ...)
 ; 	(if (not test)
 ; 		(begin body ...)))
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-unless root)
-	(let ( (node 
+	(template-desugar 
+			desugar-unless
 			(match  root
 				( ('unless test body ...)  
 					`(if ,`(not ,(desugar-unless test))
 						,`(begin ,@(desugar-unless body))))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-unless (car node))) (desugar-unless (cdr node)))
-				node)))
 
-;case 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-case
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((case (key ...) clauses ...)
 ; 	(let ((atom-key (key ...)))
 ; 		(case atom-key clauses ...)))
@@ -418,8 +579,16 @@
 ; 	(if (memv key ’(atoms ...))
 ; 		(begin body ...)
 ; 		(case key clauses ...)))
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-case root)
-	(let ( (node 
+	(template-desugar 
+			desugar-case
 			(match  root
 				( ('case (expr ... ) clauses ...)  
 					`((lambda (__atom-key__) 
@@ -450,12 +619,13 @@
 						,`(begin ,@body)
 						,`(case ,key ,@clauses)))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-case (car node))) (desugar-case (cdr node)))
-				node)))
 
 
-;do 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-do
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;
 ; ((do ((var init step ...) ...) (test expr ...) command ...)
 ; 	(letrec
 ; 		((loop
@@ -474,8 +644,16 @@
 ; 	x)
 ; ((do "step" x y)
 ; 	y)
+;
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-do root)	
-	(let ( (node 
+	(template-desugar 
+			desugar-do
 			(match root    
 				(('do ((vars inits steps ) ...) (test exprs ...) commands ...)
 					`(letrec
@@ -496,28 +674,41 @@
 					y)
 
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-do  (car node))) (desugar-do (cdr node)))
-				node)))
 
 
-
-
-;Let value helpers
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; make-get-record-name  
-; returns a lambda that takes in the var for each var and will 
-; return the next record named associated with that var 
+;---------------------------------------------------------------------------------------------;
+; Let value helper used to construct a procedure to get the name of next record object created
+;---------------------------------------------------------------------------------------------;
+;	params:
+;	return:
+;		record name "getter"		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (make-get-record-name )
 	(let ((r 0 ))
 		(lambda ( )
 			(set! r (+ r 1))
-			(string-append  " record-" (number->string r)))
-	)
-)
+			(string-append  " record-" (number->string r)))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;make-get-record-component 
+;---------------------------------------------------------------------------------------------;
+; Let value helper used to construct a procedure to get the name of procedure to access each
+;	compenent of the record object.
+; Given a record object of dimension n, it's components can be accessed valuen-i
+; The procedure return is used to get the next i in the function valuen-i
+; valuen-i should compile to valuen-1, valuen-2,  ...  valuen-n .. 
+; 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;	return:
+;		record component "getter"		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;for the component of the values (val) given it will this proc 
-; returns a lambda used count the next i in the function valuen-i
-; valuen_i should compile to valuen->_1, valuen->_2,  ...  valuen->_n .. 
+
 (define (make-get-record-component val)
 		(let ((i 0 )(n (length val)))
 			(lambda ()
@@ -526,17 +717,28 @@
 								(number->string n) "-"				
 								(number->string i))))))
 
-;let values
-; uses the record approach to return a record object and access individual values
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-let-values
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;let values uses the record approach to return a record object and access individual values
 ; ((let-values ((vars expr) ...) body ...)
 ; (let ( ((record1 expr) ... (recordn exprn) ) ) 
 ; 	(let ( (var1 (valuen_1 record))
 ; 			...
 ; 			(varn (valuen_n record)))
 ; 	 body))
-
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-let-values root)
-	(let ( (node 
+	(template-desugar 
+			desugar-let-values
 			(match  root
 				(('let-values ((vals exprs) ...) body ...)
 					;create the value proc "getter"
@@ -568,21 +770,28 @@
 								,@(desugar-let-values body))))
 						,@(desugar-let-values exprs) )))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-let-values (car node))) (desugar-let-values (cdr node)))
-				node)))
 
 
-;let values*
-; uses the record approach to return a record object and access individual values
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-let-values*
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+;let values* uses the record approach to return a record object and access individual values
 ; ((let-values ((vars expr) ...) body ...)
 ; (let ( ((record1 expr) ... (recordn exprn) ) ) 
 ; 	(let* ( (var1 (valuen_1 record))
 ; 			...
 ; 			(varn (valuen_n record)))
 ; 	 body))
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-let-values* root)
-	(let ( (node 
+		(template-desugar 
+			desugar-let-values* 
 			(match  root
 				(('let-values* ((vals exprs) ...) body ...)
 					;create the value proc "getter"
@@ -614,40 +823,130 @@
 								,@(desugar-let-values* body) )))
 						,@(desugar-let-values* exprs) )))
 				(_  root))))
-			(if (pair? node)
-				(append (list (desugar-let-values* (car node))) (desugar-let-values* (cdr node)))
-				node)))
 
-; (define (values . things)
-;   (call-with-current-continuation
-;     (lambda (cont) (apply cont things))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-force
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+; delay-force
+; ((delay-force expression)
+; 	(make-promise #f (lambda () expression)))
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-delay-force root)
+	(template-desugar 
+		desugar-delay-force
+		(match root
+			( ('delay-force  expr )
+				(list (cons  #f  (lambda () expr) )))
+			(_ root))))
 
 
-; (define call/cc call/cc)
-; (define values #f)
-; (define call-with-values #f)
-; (let ((magic (cons 'multiple 'values)))
-;   (define magic?
-;     (lambda (x)
-;       (and (pair? x) (eq? (car x) magic)))) 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-delay
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+; delay
+; ((delay expression)
+; 	(delay-force (make-promise #t expression)))))
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-delay root)
+	(template-desugar 
+		desugar-delay
+		(match root
+			( ('delay  expr )
+				(list (cons  #t  (lambda () expr) )))
+			(_ root))))
 
-;   (set! call/cc
-;     (let ((primitive-call/cc call/cc))
-;       (lambda (p)
-;         (primitive-call/cc
-;           (lambda (k)
-;             (p (lambda args
-;                  (k (apply values args))))))))) 
 
-;   (set! values
-;     (lambda args
-;       (if (and (not (null? args)) (null? (cdr args)))
-;           (car args)
-;           (cons magic args)))) 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;WIP;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;delay and delay force helpers
+;make-promise 
+; (define (make-promise done? proc)
+; 		(list (cons done? proc)))
+;force - trampolines back and forth until a value created by delay, not delay-force
+; (define (force promise)
+; 	(if (promise-done? promise)
+; 		(promise-value promise)
+; 		(let ((promise* ((promise-value promise))))
+; 			(unless (promise-done? promise)
+; 				(promise-update! promise* promise))
+; 			(force promise))))
+; ;promise accesors
+; (define (promise-done? p)
+;  	(car (car p)))
 
-;   (set! call-with-values
-;     (lambda (producer consumer)
-;       (let ((x (producer)))
-;         (if (magic? x)
-;             (apply consumer (cdr x))
-;             (consumer x))))))
+; (define ( promise-value p)
+; 	 (cdr (car p)))
+
+; (define (promise-update! new old)
+; 		(set-car! (car old) (promise-done? new))
+; 		(set-cdr! (car old) (promise-value new))
+; 		(set-car! new (car old)))
+
+; force
+; ((delay-force expression)
+; 	(make-promise #f (lambda () expression)))
+; Primitive!!!!
+; (define (desugar-force root)
+; 	(display root)(read-line)
+; 	(template-desugar 
+; 		desugar-force
+; 		(match root
+; 			( ('force  expr )
+; 				`(if (car (car ,expr))
+; 					(cdr (car ,expr))
+; 					(let ((expr* ( (cdr (car ,expr)))))
+; 						(unless (car (car ,expr))
+; 							(set-car! (car ,expr) (car (car expr*)))
+; 							(set-cdr! (car ,expr) (cdr (car expr*)))
+; 							(set-car! expr* (car ,expr)))
+; 						,(desugar-force `(force ,expr)))))
+; 			(_ root))))
+
+
+
+;paraterize helper
+; (define (make-parameter init . o)
+; 	(let* ((converter
+; 		(if (pair? o) (car o) (lambda (x) x)))
+; 			(value (converter init)))
+; 			(lambda args
+; 				(cond
+; 					((null? args)
+; 						value)
+; 					((eq? (car args) <param-set!>)
+; 						(set! value (cadr args)))
+; 					((eq? (car args) <param-convert>)
+; 						converter)
+; 					(else
+; 						(error "bad parameter syntax"))))))
+
+
+; parameterize
+; ((parameterize ("step") ((param value p old new) ...) () body)
+; 	(let ((p param) ...)
+; 		(let 
+; 			((old (p)) ...
+; 			(new ((p <param-convert>) value)) ...)
+; 			(dynamic-wind
+; 			(lambda () (p <param-set!> new) ...)
+; 				(lambda () . body)
+; 					(lambda () (p <param-set!> old) ...)))))
+
+; ((parameterize ("step") args ((param value) . rest) body)
+; 	(parameterize ("step") ((param value p old new) . args) rest body))
+
+; ((parameterize ((param value) ...) . body)
+; 	(parameterize ("step") () ((param value) ...) body))
+
+

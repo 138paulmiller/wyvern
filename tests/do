@@ -1,6 +1,6 @@
 (do (
 	(i 0 (+ i 1) )
-	;(j 0 (display "HERE"))
+	(j 0 (display "HERE"))
 	)
     ((> i 5) (display "\nDONE")(newline))      
   (newline)
