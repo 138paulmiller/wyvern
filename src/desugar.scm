@@ -21,7 +21,7 @@
 ; 	do  				
 ; 	delay 			
 ; 	delay-force 
-;	quoted-expressions TODO		
+;	prefixes 		TODO		
 ; 	parameterize  	TODO
 ; 	case-lambda		TODO
 ; 	guard  			TODO
@@ -38,7 +38,10 @@
 ;	force
 ;	memv
 ;	list
+;	append
 ;	vector
+;	vector-set!
+;	vector-ref
 ;	valuen-i
 ;	values
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -60,29 +63,35 @@
 
 (define (desugar root)
 	(desugar-delay
-	(desugar-delay-force
-	(desugar-begin
-	(desugar-let-values* 
-	(desugar-let-values
-	(desugar-letrec*
-	(desugar-letrec
-	(desugar-let* 
-	(desugar-let 
-	(desugar-or
-	(desugar-and 
-	(desugar-cond 
-	(desugar-case
-	(desugar-unless
-	(desugar-when 
-	(desugar-do
-	(desugar-brackets	
-	(desugar-strings 
-	root)))))))))))))))))))
+		(desugar-delay-force
+			(desugar-begin
+				(desugar-let-values* 
+					(desugar-let-values
+						(desugar-letrec*
+							(desugar-letrec
+								(desugar-let* 
+									(desugar-let 
+										(desugar-or
+												(desugar-and 
+													(desugar-cond 
+														(desugar-case
+															(desugar-unless
+																(desugar-when 
+																	(desugar-do
+																		(desugar-define
+																			(desugar-prefix
+																				(desugar-brackets	
+																					(desugar-strings 
+																						root)))))))))))))))))))))
 
 ;;Unused for now
-(define (syntax-error msg)
+(define (syntax-error msg root)
  	(call/cc (lambda (e)
- 			(display msg))))
+ 			(display "\n*** Syntax Error:")
+ 			(display (string-append "At Line: " (number->string line) "***\n" ))
+ 			(display root)
+ 			(display "\nMessage:")
+ 			(display msg)(newline))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; template-desugar  
@@ -99,11 +108,11 @@
 ;		new formed expression
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (template-desugar caller production)
-	(let ( (node production ))
-			(if (pair? node)
-				(append (list  (caller (car node))) 
-						( caller (cdr node)))
-				node)))
+	(let ( (node production ))		
+		(if (pair? node)
+			(append (list  (caller (car node))) 
+					( caller (cdr node)))
+			node)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -149,15 +158,69 @@
 						(lambda (chr str) 
 								(string-append 
 									(cond 
-										((char=? chr #\newline) "\n")
+										((char=? chr #\newline) "\\n")
 										((char=? chr #\") "\\\"")
 										((char=? chr #\') "\\\'")
+										((char=? chr #\\) "\\\\")
 										(else 
 											(string  chr)))
 									 str)) 
 						"" (string->list root) ) 
 					"\"")
 				root)))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-prefix  
+;---------------------------------------------------------------------------------------------;
+; Transforms all instances of prefixed expressions into 
+;	procedure call expressions  
+;	E.g. '( expr+ ) => (quote (expr+))   
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-prefix root)	
+	(template-desugar 
+			desugar-prefix
+			(match root
+				( ( ''( expr ... ) )  
+					`(quote ,expr))
+				( ( '`( expr ... ) )  
+					`(quasiquote ,expr))
+				( #(  expr ...  )  
+					`(vector ,expr))
+				(_ root))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-define
+;---------------------------------------------------------------------------------------------;
+; Expresses begin according to the following:
+;	(define (sym ...) expr ... )
+;		(define sym1 (lambda ( sym2 ...) expr...  ))
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-define root)	
+	(template-desugar 
+			desugar-define
+			(match root
+				( ( ('define (syms ...) exprs ... ) )
+					(if (or (null? syms) (null? exprs))     
+						(syntax-error "Expected: (define (syms+) exprs+ )" root)
+						`(define ,(car syms) 
+							(lambda ,cdr syms 
+								,@exprs ))))
+				(_ root))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -179,6 +242,7 @@
 				( ('begin body ...  )  
 					`((lambda  () ,@body)))
 				(_  root))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-cond
@@ -222,47 +286,49 @@
 ;		new formed expression		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-cond root)	
-	(template-desugar 
-			desugar-cond
-			(match root    
-				( ('cond ('else body ...))
-					`(begin ,@(desugar-cond body)))
-	
-				(('cond (test '=> result))
-					`((lambda (temp)
-						,`(if temp 
-							(,(desugar-cond result) temp)))  
-							,(desugar-cond test) ))
-				
-				(('cond (test '=> result) clauses ...)
-					`((lambda (temp)
-						,`(if temp 
-							(,(desugar-cond result) temp)
-							,(desugar-cond `(cond ,@clauses))))  
-							,(desugar-cond test)))
+	(if (and (pair? root) (eq? 'cond (car root)))
+		(template-desugar 
+				desugar-cond
+				(match root    
+					( ('cond ('else body ...))
+						`(begin ,@(desugar-cond body)))
+		
+					(('cond (test '=> result))
+						`((lambda (temp)
+							,`(if temp 
+								(,(desugar-cond result) temp)))  
+								,(desugar-cond test) ))
+					
+					(('cond (test '=> result) clauses ...)
+						`((lambda (temp)
+							,`(if temp 
+								(,(desugar-cond result) temp)
+								,(desugar-cond `(cond ,@clauses))))  
+								,(desugar-cond test)))
 
-				(('cond (test))
-					(desugar-cond test))
+					(('cond (test))
+						(desugar-cond test))
 
-				(('cond (test) clauses ...)
-					`((lambda (temp)
-						,`(if temp
-							temp
-							,(desugar-cond `(cond ,@clauses)))) 
-					,(desugar-cond test)))
-				
+					(('cond (test) clauses ...)
+						`((lambda (temp)
+							,`(if temp
+								temp
+								,(desugar-cond `(cond ,@clauses)))) 
+						,(desugar-cond test)))
+					
 
-				(('cond (test body ...))
-					`(if ,(desugar-cond test) ,`(begin ,@(desugar-cond body))))
+					(('cond (test body ...))
+						`(if ,(desugar-cond test) ,`(begin ,@(desugar-cond body))))
 
 
-				(('cond (test body ...) clauses ...)
-					 `(if ,(desugar-cond test)
-				 		,`(begin ,@(desugar-cond body))
-				 		,(desugar-cond `(cond ,@clauses ))))
-				(_  
-					root
-				))))
+					(('cond ((and test (not 'else) )  body ...) clauses ...)
+						 `(if ,(desugar-cond test)
+					 		,`(begin ,@(desugar-cond body))
+					 		,(desugar-cond `(cond ,@clauses ))))
+					(_  
+						(syntax-error "Expected: (cond (test expr*)* (else expr*)? )" root)
+					)))
+	root))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-let
 ;---------------------------------------------------------------------------------------------;
@@ -297,8 +363,7 @@
 								((,tag (lambda ,vars 
 											,@body )))
 										,tag)
-								,@exprs))
-				)
+								,@exprs)))
 				(_  
 					root
 				))))
@@ -706,9 +771,6 @@
 ;	return:
 ;		record component "getter"		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;for the component of the values (val) given it will this proc 
-
 (define (make-get-record-component val)
 		(let ((i 0 )(n (length val)))
 			(lambda ()

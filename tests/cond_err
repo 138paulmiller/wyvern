@@ -1,0 +1,7 @@
+(cond 
+	(else #f) 
+	(#t))
+
+(cond 
+	(else #f) 
+	(after #t))
