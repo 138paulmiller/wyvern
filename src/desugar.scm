@@ -21,7 +21,7 @@
 ; 	do  				
 ; 	delay 			
 ; 	delay-force 
-;	prefixes 		TODO		
+;	prefixes 				
 ; 	parameterize  	TODO
 ; 	case-lambda		TODO
 ; 	guard  			TODO
@@ -63,26 +63,27 @@
 
 (define (desugar root)
 	(desugar-delay
-		(desugar-delay-force
-			(desugar-begin
-				(desugar-let-values* 
-					(desugar-let-values
-						(desugar-letrec*
-							(desugar-letrec
-								(desugar-let* 
-									(desugar-let 
-										(desugar-or
-												(desugar-and 
-													(desugar-cond 
-														(desugar-case
-															(desugar-unless
-																(desugar-when 
-																	(desugar-do
-																		(desugar-define
-																			(desugar-prefix
-																				(desugar-brackets	
-																					(desugar-strings 
-																						root)))))))))))))))))))))
+	(desugar-delay-force
+	(desugar-begin
+	(desugar-let*-values 
+	(desugar-let-values
+	(desugar-letrec*
+	(desugar-letrec
+	(desugar-let* 
+	(desugar-let 
+	(desugar-or
+	(desugar-and 
+	(desugar-cond 
+	(desugar-case
+	(desugar-unless
+	(desugar-when 
+	(desugar-do
+	(desugar-define
+	(desugar-quasiquote
+	(desugar-prefix
+	(desugar-brackets	
+	(desugar-strings 
+	root))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -190,13 +191,75 @@
 			(match root
 				( ( ''( expr ... ) )  
 					`(quote ,expr))
+				( ( ',( expr ... ) )  
+					`(unquote ,expr))
 				( ( '`( expr ... ) )  
 					`(quasiquote ,expr))
+				( ( ',@( expr ... ) )  
+					`(unquote-splicing ,expr))
 				( #(  expr ...  )  
 					`(vector ,expr))
 				(_ root))))
 
 
+; <quasiquotation> −→ <quasiquotation 1>
+; <qq template 0> −→ <expression>
+; <quasiquotationD> −→ (quasiquote<qq templateD>)
+
+; <qq templateD> −→ <simple datum>
+; | <list qq templateD>
+; |<vector qq templateD>
+; |<unquotationD>
+
+; <list qq templateD> −→(<qq template or spliceD>*)
+; |(<qq template or spliceD>+.<qq templateD>)
+; |’<qq templateD>
+; | <quasiquotationD+ 1>
+; <vector qq templateD> −→#(<qq template or spliceD>*)
+
+; <unquotationD>−→ (unquote<qq templateD−1>)
+
+; <qq template or spliceD> −→ <qq templateD>
+; |<splicing unquotationD>
+; <splicing unquotationD> −→ (unquote-splicing<qq templateD−1>)
+
+
+
+
+(define (desugar-quasiquote root)
+	(template-desugar 
+			desugar-prefix
+			(match root
+
+				(('quasiquote (datum ) )
+					`(list ,(desugar-quasiquote `(qq1 ,datum)))
+				)
+				(('quasiquote (datums ...) )
+					`(list ,(map (lambda (datum) 
+						(desugar-quasiquote `(qq1 ,datum) ))
+						datums))
+				)
+				; (('quasiquote ( ('unquote datum) ) )
+				; 	(desugar-quasiquote datum)
+				; )
+				; (('quasiquote ( ('unquote datum) datums ...) )
+				; 	(list (desugar-quasiquote datum) (desugar-quasiquote (quasiquote datums) ))
+				; )
+				; (('quasiquote (('unquote-splicing datum) datums ...) )
+				; 	(append (desugar-quasiquote datum) (desugar-quasiquote (quasiquote datums) ))
+				; )
+				;level 1
+				(('qq1 datum  )
+					(if (and (pair? datum ) (eqv? (car datum) 'unquote ))  
+						 (desugar-quasiquote `(qq0 ,(cadr datum)))
+						`(quote ,(desugar-quasiquote `(qq0 ,datum))))
+				)
+				(('qq0 datum  )
+					(if (and (pair? datum ) (eqv? (car datum) 'unquote ))  
+						(syntax-error "Unquote depth does not match quasiquotation" root))
+						(desugar-quasiquote datum)
+				)
+				(_ root))))	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-define
 ;---------------------------------------------------------------------------------------------;
@@ -328,7 +391,7 @@
 					(_  
 						(syntax-error "Expected: (cond (test expr*)* (else expr*)? )" root)
 					)))
-	root))
+		root))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-let
 ;---------------------------------------------------------------------------------------------;
@@ -670,16 +733,16 @@
 					`(if ,`(memv ,key ',atoms )
 						,`(begin ,@(desugar-case body))))
 
-				( (case key ((atoms ...) => result))
+				( ('case key ((atoms ...) => result))
 					`(if ,`(memv ,key ',atoms )
 						,`(,@(desugar-case result) ,key )))
 
-				( (case key ((atoms ...) => result) clauses ...)
+				( ('case key ((atoms ...) => result) clauses ...)
 					`(if ,`(memv ,key ',atoms )
 						,`(,@(desugar-case result) ,key )
 						,`(case ,key ,@clauses)))
 
-				( (case key ((atoms ...) body ...) clauses ...)
+				( ('case key ((atoms ...) body ...) clauses ...)
 					`(if ,`(memv ,key ',atoms )
 						,`(begin ,@body)
 						,`(case ,key ,@clauses)))
@@ -835,7 +898,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; desugar-let-values*
+; desugar-let*-values
 ;---------------------------------------------------------------------------------------------;
 ; Expresses according to the following:
 ;let values* uses the record approach to return a record object and access individual values
@@ -851,11 +914,11 @@
 ;	return:
 ;		new formed expression		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (desugar-let-values* root)
+(define (desugar-let*-values root)
 		(template-desugar 
-			desugar-let-values* 
+			desugar-let*-values 
 			(match  root
-				(('let-values* ((vals exprs) ...) body ...)
+				(('let*-values ((vals exprs) ...) body ...)
 					;create the value proc "getter"
 					(let* ( 
 							;get all record names, wrap proc in lambda that takes an arg
@@ -882,8 +945,8 @@
 								     '()  vals)))
 						`((lambda ,record-names
 							,(desugar-let* `(let* ,bindings
-								,@(desugar-let-values* body) )))
-						,@(desugar-let-values* exprs) )))
+								,@(desugar-let*-values body) )))
+						,@(desugar-let*-values exprs) )))
 				(_  root))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -928,6 +991,8 @@
 			( ('delay  expr )
 				(list (cons  #t  (lambda () expr) )))
 			(_ root))))
+
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;WIP;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -6,7 +6,7 @@
 	( *  a b c ) )
 ;comments here baby
 
-(let-values* (
+(let*-values (
 	((a b) (values 3 a) )
 	((c d e) (values a b 3) )
 

@@ -11,10 +11,11 @@
 ;				(lambda (v1 ... ) (... x1 ...)  ) => (lambda (v1 ... ) (... x1 ...)  ) 
 ;
 ;	3: Closure Conversion: Convert lambda's into closure allocation 
-;
 ;				(lambda (v1 ... vN) ... x ...) =>
-;	 			(closure (lambda ($env v1 ... vN) ... (env-get k x $env) ...)
-;         				 (make-env-struct k (x1 x1) ... (xN xN))) => which becomes
+;	 			(closure (lambda ($env v1 ... vN) 
+;							... (env-get k x $env) ...)
+;         				 (make-env-struct k (x1 x1) ... (xN xN))) 
+;					=> which becomes
 ;				 	MakeClosure(lambda_k,alloc_env_k(x1,...xN))
 
 ;						 struct env_k {
@@ -43,7 +44,12 @@
 ;			
 ;			Create closure pointing to lambda proc, and create env-struct for all free vars for the closure
 ;
-;	4: Mutable Variables  Create Cells that are globally defined
+;	4: Mutable Variables  Create Cells that are allocated on the heap for all vars modified with set!
+; 			(lambda (... mvar ...) body) 
+;           =>
+; 			(lambda (... $v ...) 
+; 			 (let ((mvar (cell $v)))
+;   					body))
 ;					
 (declare (unit manip))
 (use srfi-1)
@@ -57,9 +63,7 @@
 				(display (get-free-vars root)))
 
 			(append (list  (manip (car root))) 
-					( manip(cdr root)))
-
-		)
+					( manip(cdr root))))
 		root))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; free-vars
@@ -83,3 +87,5 @@
 		(if (symbol? root)
 			(list root)
 			`())))
+
+
