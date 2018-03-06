@@ -83,7 +83,8 @@
 	(desugar-prefix
 	(desugar-brackets	
 	(desugar-strings 
-	root))))))))))))))))))))))
+	root
+	))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -191,10 +192,10 @@
 			(match root
 				( ( ''( expr ... ) )  
 					`(quote ,expr))
-				( ( ',( expr ... ) )  
-					`(unquote ,expr))
 				( ( '`( expr ... ) )  
 					`(quasiquote ,expr))
+				( ( ',( expr ... ) )  
+					`(unquote ,expr))
 				( ( ',@( expr ... ) )  
 					`(unquote-splicing ,expr))
 				( #(  expr ...  )  
@@ -202,43 +203,106 @@
 				(_ root))))
 
 
-; <quasiquotation> −→ <quasiquotation 1>
-; <qq template 0> −→ <expression>
-; <quasiquotationD> −→ (quasiquote<qq templateD>)
+; (define (quasiquote-expand expr lst )
+; 	(display expr)(read-line)
+; 		(match expr
 
-; <qq templateD> −→ <simple datum>
-; | <list qq templateD>
-; |<vector qq templateD>
-; |<unquotationD>
+; 			(((or 'quasiquote 'qq) (datum datums ... ) )
+; 				(let ((this
+; 					(match datum
+; 						( ('unquote d )
+; 							(append lst (quasiquote-expand d lst))
+; 						)
+; 						(( 'unquote-splice d )
+; 							`(append lst ,@(quasiquote-expand d lst))
+; 						)
+; 						(_ 
+; 							(cons lst (quasiquote-expand datum lst ))
+; 						)
+; 					)))
 
-; <list qq templateD> −→(<qq template or spliceD>*)
-; |(<qq template or spliceD>+.<qq templateD>)
-; |’<qq templateD>
-; | <quasiquotationD+ 1>
-; <vector qq templateD> −→#(<qq template or spliceD>*)
+; 					(if (pair? datums)
+; 						(quasiquote-expand `(qq ,datums) this)
+; 						this
+; 					)
+						
+; 				)	
+; 			)
+; 			(((or 'quasiquote 'qq) (datum ) )
 
-; <unquotationD>−→ (unquote<qq templateD−1>)
+				
+; 				(match datum
+; 					( ('unquote d )
+; 						(cons lst (quasiquote-expand d lst))
+; 					)
+; 					(( 'unquote-splice d )
+; 						`(append lst ,@(quasiquote-expand d lst))
+; 					)
+; 					(_ 
+; 						(cons lst (quasiquote-expand `(quote ,datum ) lst ))
+; 					)
+; 				)
 
-; <qq template or spliceD> −→ <qq templateD>
-; |<splicing unquotationD>
-; <splicing unquotationD> −→ (unquote-splicing<qq templateD−1>)
+; 			)
 
 
+; 			(_
+; 				expr	
+; 			)
+; 		))
 
+(define (qq expr)
+   (match expr
+	   (  ((or 'qq 'quasiquote) ('unquote datum) )
+	     	(qq datum))
+	    
+	    ( ((or 'qq 'quasiquote) (('unquote-splicing datum) next ... ) )
+	    	;(append (qq datum) (qq `(qq ,next))))
+	    	(append `(,(qq datum)) (qq `(qq ,next))))
+	    
+	    ( ((or 'qq 'quasiquote) (('quasiquote datum) next ... ) )
+	    	(cons `(list ,(qq `(qq ,datum  ))) (qq `(qq ,next))))
+
+	    ( ( (or 'qq 'quasiquote) (datum next ... ) )
+	    	(cons (qq `(qq ,datum  )) (qq `(qq ,next))))
+	    
+	    ( ( (or 'qq 'quasiquote) datum )
+	    	(if (null? datum)
+	     		datum
+	     		`(quote ,(qq datum)))
+	    		)
+
+	    (_ expr)
+	    ))
 
 (define (desugar-quasiquote root)
 	(template-desugar 
 			desugar-prefix
 			(match root
+				(('quasiquote (datums ... ) )
+					`(list ,@(qq root )))
+			
 
-				(('quasiquote (datum ) )
-					`(list ,(desugar-quasiquote `(qq1 ,datum)))
-				)
-				(('quasiquote (datums ...) )
-					`(list ,(map (lambda (datum) 
-						(desugar-quasiquote `(qq1 ,datum) ))
-						datums))
-				)
+				; (('quasiquote (datums ... ) )
+				; 	`(list ,@(quasiquote-expand root '())))
+			
+				; (('quasiquote datum )
+				; 	`(list ,@(quasiquote-expand `( ,datum ) '())))
+				
+
+				; (('quasiquote (datum ) )
+				; 	(if(eqv? (car datum) 'unquote-splicing ) 
+				; 		 		(desugar-quasiquote `(qq0 ,@(cadr datum))))
+				; 	`(list ,(desugar-quasiquote `(qq1 ,datum)))
+				; )
+				; (('quasiquote (datums ...) )
+				; 	`(list ,(map (lambda (datum) 
+				; 		(desugar-quasiquote `(qq1 ,datum) ))
+				; 		datums))
+				; )
+				; (('unquote (datums ...) )
+				; 	(syntax-error "Unquote not inside quasiquotation" root)
+				; )
 				; (('quasiquote ( ('unquote datum) ) )
 				; 	(desugar-quasiquote datum)
 				; )
@@ -249,16 +313,30 @@
 				; 	(append (desugar-quasiquote datum) (desugar-quasiquote (quasiquote datums) ))
 				; )
 				;level 1
-				(('qq1 datum  )
-					(if (and (pair? datum ) (eqv? (car datum) 'unquote ))  
-						 (desugar-quasiquote `(qq0 ,(cadr datum)))
-						`(quote ,(desugar-quasiquote `(qq0 ,datum))))
-				)
-				(('qq0 datum  )
-					(if (and (pair? datum ) (eqv? (car datum) 'unquote ))  
-						(syntax-error "Unquote depth does not match quasiquotation" root))
-						(desugar-quasiquote datum)
-				)
+				; (('qq1 datum  )
+				; 	(if (pair? datum ) 
+				; 		(cond 
+				; 			((eqv? (car datum) 'unquote ) 
+				; 		 		(desugar-quasiquote `(qq0 ,(cadr datum))))
+				; 			; ((eqv? (car datum) 'unquote-splicing ) 
+				; 		 ; 		(desugar-quasiquote `(qq0 ,@(cadr datum))))
+				; 			((eqv? (car datum) 'quasiquote ) 
+				; 		 		`(quote ,(desugar-quasiquote `(qq0 ,(cadr datum)))))
+				; 			(else 
+				; 				`(quote ,(desugar-quasiquote `(qq0 ,datum)))))
+						
+				; 		`(quote ,(desugar-quasiquote `(qq0 ,datum)))))
+				; (('qq0 datum  )
+				; 	(if (pair? datum )
+				; 		(cond
+				; 			((eqv? (car datum) 'unquote )
+				; 				(syntax-error "Unquote depth does not match quasiquotation" root))
+				; 			((eqv? (car datum) 'quasiquote ) 
+				; 		 		`(quote ,(desugar-quasiquote `(qq0 ,(cadr datum)))))  
+				; 			(else
+				; 				(desugar-quasiquote datum)))
+				; 			(desugar-quasiquote datum)))
+
 				(_ root))))	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-define
