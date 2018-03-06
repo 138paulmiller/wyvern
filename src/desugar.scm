@@ -195,7 +195,7 @@
 				( ( '`( expr ... ) )  
 					`(quasiquote ,expr))
 				( ( ',( expr ... ) )  
-					`(unquote ,expr))
+					`(unquote ,expr) ) ;"unquote" yields warning
 				( ( ',@( expr ... ) )  
 					`(unquote-splicing ,expr))
 				( #(  expr ...  )  
@@ -203,84 +203,37 @@
 				(_ root))))
 
 
-; (define (quasiquote-expand expr lst )
-; 	(display expr)(read-line)
-; 		(match expr
 
-; 			(((or 'quasiquote 'qq) (datum datums ... ) )
-; 				(let ((this
-; 					(match datum
-; 						( ('unquote d )
-; 							(append lst (quasiquote-expand d lst))
-; 						)
-; 						(( 'unquote-splice d )
-; 							`(append lst ,@(quasiquote-expand d lst))
-; 						)
-; 						(_ 
-; 							(cons lst (quasiquote-expand datum lst ))
-; 						)
-; 					)))
-
-; 					(if (pair? datums)
-; 						(quasiquote-expand `(qq ,datums) this)
-; 						this
-; 					)
-						
-; 				)	
-; 			)
-; 			(((or 'quasiquote 'qq) (datum ) )
-
-				
-; 				(match datum
-; 					( ('unquote d )
-; 						(cons lst (quasiquote-expand d lst))
-; 					)
-; 					(( 'unquote-splice d )
-; 						`(append lst ,@(quasiquote-expand d lst))
-; 					)
-; 					(_ 
-; 						(cons lst (quasiquote-expand `(quote ,datum ) lst ))
-; 					)
-; 				)
-
-; 			)
-
-
-; 			(_
-; 				expr	
-; 			)
-; 		))
-
-(define (qq expr)
+(define (expand-qq expr )
    (match expr
 	   (  ((or 'qq 'quasiquote) ('unquote datum) )
-	     	(qq datum))
+	     	 `(list ,(expand-qq datum )))
 	    
 	    ( ((or 'qq 'quasiquote) (('unquote-splicing datum) next ... ) )
 	    	;(append (qq datum) (qq `(qq ,next))))
-	    	(append `(,(qq datum)) (qq `(qq ,next))))
+	    	(cons (expand-qq datum) (expand-qq `(qq ,next ))))
 	    
 	    ( ((or 'qq 'quasiquote) (('quasiquote datum) next ... ) )
-	    	(cons `(list ,(qq `(qq ,datum  ))) (qq `(qq ,next))))
-
+	    		
+	    		(cons `(list ,`(append ,@(expand-qq `(qq ,datum ))))
+						(expand-qq `(qq ,next ) ))
+	    		)
 	    ( ( (or 'qq 'quasiquote) (datum next ... ) )
-	    	(cons (qq `(qq ,datum  )) (qq `(qq ,next))))
+	    	(cons (expand-qq `(qq ,datum  ) ) (expand-qq `(qq ,next) )))
 	    
 	    ( ( (or 'qq 'quasiquote) datum )
 	    	(if (null? datum)
 	     		datum
-	     		`(quote ,(qq datum)))
-	    		)
+	     		`(list (quote ,(expand-qq datum )))))
+	    (_ expr)))
 
-	    (_ expr)
-	    ))
 
 (define (desugar-quasiquote root)
 	(template-desugar 
 			desugar-prefix
 			(match root
 				(('quasiquote (datums ... ) )
-					`(list ,@(qq root )))
+					`(append ,@(expand-qq root)))
 			
 
 				; (('quasiquote (datums ... ) )
