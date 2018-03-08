@@ -4,7 +4,7 @@
 
 	) 
 	( *  a b c ) )
-;comments here baby
+;comments here
 
 (let*-values (
 	((a b) (values 3 a) )
@@ -13,17 +13,3 @@
 	) 
 	( *  a b c ) )
 
-
-
-
-((lambda ( record-1  record-2) 
-	((lambda (a) 
-		((lambda (b) 
-			((lambda (c) 
-				((lambda (d) 
-					((lambda (e) (* a b c)) 
-					(value3-3  record-1))) 
-				(value3-2  record-1))) 
-			(value3-1  record-1))) 
-		(value2-2  record-2))) 
-	(value2-1  record-2))) (values 3 4) (values a b 3))

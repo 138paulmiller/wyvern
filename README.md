@@ -1,5 +1,5 @@
 # wyvern
-Scheme to LLVM in Scheme
+Scheme to JS/LLVM in Scheme
 
 #### Dependencies 
 - Chicken Scheme

@@ -35,15 +35,17 @@
 ;	quote
 ; 	set!
 ;	if
-;	force
-;	memv
+;	force  ? ???
+;	memv   ? (can be defined with eq? and cdr)
 ;	list
-;	append
+;	append ? (can defined with set! and cdr)
 ;	vector
 ;	vector-set!
 ;	vector-ref
-;	valuen-i
-;	values
+;	valuen-i value accessor
+;	values   value object (contains to be returned)
+;	display
+;	primitives - (* / + - )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (declare (unit desugar))
 (use srfi-1)
@@ -62,6 +64,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (desugar root)
+	;ordered desugaring, some phases use sugared syntax
+	(desugar-return
+	(desugar-lambda
 	(desugar-delay
 	(desugar-delay-force
 	(desugar-begin
@@ -79,12 +84,13 @@
 	(desugar-when 
 	(desugar-do
 	(desugar-define
+	(desugar-quote
 	(desugar-quasiquote
 	(desugar-prefix
 	(desugar-brackets	
 	(desugar-strings 
 	root
-	))))))))))))))))))))))
+	)))))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -204,11 +210,28 @@
 
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-quasiquote
+;---------------------------------------------------------------------------------------------;
+; Expresses begin according to the following by calling expand-qq:
+;	(quote (datums ...))
+;		(append (list (quote datum) ) ...(list (quote datumn))))
+;		and
+; 		(append ... (list (quote (unquote datum) ))) ==> (append ...(list datum))
+; 		(append ... (list (quote (unquote-splicing datum-list) ))) ==> (append ... datum-list)
+
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (expand-qq expr )
    (match expr
 	   (  ((or 'qq 'quasiquote) ('unquote datum) )
 	     	 `(list ,(expand-qq datum )))
-	    
 	    ( ((or 'qq 'quasiquote) (('unquote-splicing datum) next ... ) )
 	    	;(append (qq datum) (qq `(qq ,next))))
 	    	(cons (expand-qq datum) (expand-qq `(qq ,next ))))
@@ -216,8 +239,7 @@
 	    ( ((or 'qq 'quasiquote) (('quasiquote datum) next ... ) )
 	    		
 	    		(cons `(list ,`(append ,@(expand-qq `(qq ,datum ))))
-						(expand-qq `(qq ,next ) ))
-	    		)
+						(expand-qq `(qq ,next ) )))
 	    ( ( (or 'qq 'quasiquote) (datum next ... ) )
 	    	(cons (expand-qq `(qq ,datum  ) ) (expand-qq `(qq ,next) )))
 	    
@@ -227,70 +249,36 @@
 	     		`(list (quote ,(expand-qq datum )))))
 	    (_ expr)))
 
-
 (define (desugar-quasiquote root)
 	(template-desugar 
-			desugar-prefix
+			desugar-quasiquote
 			(match root
 				(('quasiquote (datums ... ) )
 					`(append ,@(expand-qq root)))
-			
-
-				; (('quasiquote (datums ... ) )
-				; 	`(list ,@(quasiquote-expand root '())))
-			
-				; (('quasiquote datum )
-				; 	`(list ,@(quasiquote-expand `( ,datum ) '())))
-				
-
-				; (('quasiquote (datum ) )
-				; 	(if(eqv? (car datum) 'unquote-splicing ) 
-				; 		 		(desugar-quasiquote `(qq0 ,@(cadr datum))))
-				; 	`(list ,(desugar-quasiquote `(qq1 ,datum)))
-				; )
-				; (('quasiquote (datums ...) )
-				; 	`(list ,(map (lambda (datum) 
-				; 		(desugar-quasiquote `(qq1 ,datum) ))
-				; 		datums))
-				; )
-				; (('unquote (datums ...) )
-				; 	(syntax-error "Unquote not inside quasiquotation" root)
-				; )
-				; (('quasiquote ( ('unquote datum) ) )
-				; 	(desugar-quasiquote datum)
-				; )
-				; (('quasiquote ( ('unquote datum) datums ...) )
-				; 	(list (desugar-quasiquote datum) (desugar-quasiquote (quasiquote datums) ))
-				; )
-				; (('quasiquote (('unquote-splicing datum) datums ...) )
-				; 	(append (desugar-quasiquote datum) (desugar-quasiquote (quasiquote datums) ))
-				; )
-				;level 1
-				; (('qq1 datum  )
-				; 	(if (pair? datum ) 
-				; 		(cond 
-				; 			((eqv? (car datum) 'unquote ) 
-				; 		 		(desugar-quasiquote `(qq0 ,(cadr datum))))
-				; 			; ((eqv? (car datum) 'unquote-splicing ) 
-				; 		 ; 		(desugar-quasiquote `(qq0 ,@(cadr datum))))
-				; 			((eqv? (car datum) 'quasiquote ) 
-				; 		 		`(quote ,(desugar-quasiquote `(qq0 ,(cadr datum)))))
-				; 			(else 
-				; 				`(quote ,(desugar-quasiquote `(qq0 ,datum)))))
-						
-				; 		`(quote ,(desugar-quasiquote `(qq0 ,datum)))))
-				; (('qq0 datum  )
-				; 	(if (pair? datum )
-				; 		(cond
-				; 			((eqv? (car datum) 'unquote )
-				; 				(syntax-error "Unquote depth does not match quasiquotation" root))
-				; 			((eqv? (car datum) 'quasiquote ) 
-				; 		 		`(quote ,(desugar-quasiquote `(qq0 ,(cadr datum)))))  
-				; 			(else
-				; 				(desugar-quasiquote datum)))
-				; 			(desugar-quasiquote datum)))
-
 				(_ root))))	
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-quote
+;---------------------------------------------------------------------------------------------;
+; Expresses begin according to the following:
+;	(quote (datums ...))
+;		(list (quote datum1) ... (quote datumn)))
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-quote root)
+	(template-desugar 
+			desugar-quote
+			(match root
+				(('quote (datums ... ) )
+					`(list  ,@(map (lambda(datum) `(quote ,(desugar-quote datum)) ) datums)))
+				(_ root))))	
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-define
 ;---------------------------------------------------------------------------------------------;
@@ -308,11 +296,11 @@
 	(template-desugar 
 			desugar-define
 			(match root
-				( ( ('define (syms ...) exprs ... ) )
+				(('define (syms ...) exprs ... )
 					(if (or (null? syms) (null? exprs))     
 						(syntax-error "Expected: (define (syms+) exprs+ )" root)
 						`(define ,(car syms) 
-							(lambda ,cdr syms 
+							,`(lambda ,(cdr syms) 
 								,@exprs ))))
 				(_ root))))
 
@@ -1023,8 +1011,56 @@
 				(list (cons  #t  (lambda () expr) )))
 			(_ root))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-lambda
+;---------------------------------------------------------------------------------------------;
+; Expresses according to the following:
+; delay
+; ((lambda (formals) exprs ... )
+; 	((lambda (formals)(begin exprs ...) )
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-lambda root)
+	(template-desugar 
+		desugar-lambda
+		(match root
+			( ('lambda (formals ... ) exprs ... expr )
+				`(lambda ,formals ,`(begin ,@(if (null? exprs) `(()) exprs)  ) ,`(return ,expr)  ))
+			(_ root))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-return
+;---------------------------------------------------------------------------------------------;
+; Finds last inner-most expr of a lambda 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : lambda-expr
+;	return:
+;		last expr		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-return root)
+	(template-desugar 
+		desugar-return
+		(match root
+			(('return expr)
+				;if if stmt append return to then and else,
+				; otherwise just return
+				(match expr
+					( ('if test then) 
+						`(if ,test 
+							,(desugar-return `(return ,then)) ))
+					( ('if test then else) 
+						`(if ,test 
+							,(desugar-return `(return ,then) ) 
+							,(desugar-return `(return ,else) )))
+					(_ root)))
+			;if symbol is found
+			(_ root))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;WIP;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;delay and delay force helpers
