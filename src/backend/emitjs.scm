@@ -1,9 +1,8 @@
 
-
-;Does not rely on syntax manipulation since most features will fall through to JS (more transpile than compile)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Ur-Scheme to JS  
 ;---------------------------------------------------------------------------------------------;
+; define 		=> var sym = (compile expr)
 ; 	lambda		=> anonymous function with return == last expr and wrapped with (function(formals){exprs...})
 ;	car			=> list[0]
 ; 	cdr			=> list.slice(1)
@@ -20,8 +19,7 @@
 ;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
 ;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
 ;	display 	=> 		console.log((compile-expr expr));
-;
-;
+; return 		=> lambda return value
 ;
 ;---------------------------------------------------------------------------------------------;
 ; Tail-calls will be handled by having all user defined lambdas return thunks containing lambda body.
@@ -46,6 +44,9 @@
 ; And each function call becomes trampoline((compile lambda))
 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Test on http://www.webtoolkitonline.com/javascript-tester.html
+; Does not rely on syntax manipulation since most features will fall through to JS (more transpile than compile)
+
 (declare (uses analyze))
 (declare (uses util))
 (declare (uses desugar))
@@ -62,12 +63,13 @@
 
 
 (define (emitjs body filename)
-	(let ((out-port (open-output-file filename)))
-		(display (compile-primitives) out-port ) 
-		(display (compile-body body) out-port )))
+	(let ((source (string-append (compile-primitives) (compile-body body) )))
+		(display source (open-output-file filename) )
+		))
 
 
 (define (compile-primitives)
+;change to accept lists? or desugar all vararg to binary (* 1 2 ... n ) => (__mul__ 1 (__mul__ 2 (... n ) ) )
 "
 const __add__ = function(a, b){return a+b;};
 const __sub__ = function(a, b){return a-b;};
@@ -81,16 +83,15 @@ const __ate__  = function(a, b){return a==b;};
 const __ste__  = function(a, b){return a===b;};
 const __eq__  = function(a, b){return _.isEqual(a,b);};
 const __eqv__  = function(a, b){return _.isEqual(a,b);};
-const display  = function(a){console.log(a);};
+const display  = function(a){return console.log(a);};
 "
 )
 
 (define (compile-body exprs)
 	(let ((js ""))
 		(map (lambda(expr)
-					(set! js (string-append js (compile-expr expr) ";\n" ) ))
+				(set! js (string-append js (compile-expr expr) ";\n\n" ) ))
 			exprs)
-
 		js))
 
 ;match the ur-scheme to produce
@@ -99,11 +100,18 @@ const display  = function(a){console.log(a);};
 		" "
 		(match expr
 			( ('lambda ( formals ... ) body ... return)
-
 				(compile-lambda formals body return))
+			;check special forms
+			( ( 'if test then  )
+				(compile-if test then '()))
+			( ( 'if test then else)
+				(compile-if test then else))
+			( ('return expr) 
+				(compile-return expr))
+			;check if application after special forms
 			( ( args ... )
-				(compile-proc (car args) (cdr args))
-				)
+				(compile-proc (car args) (cdr args)))
+
 			( _ 
 				(cond
 					((char? expr) (string expr))
@@ -132,9 +140,12 @@ const display  = function(a){console.log(a);};
 					(set! js-formals (string-append js-formals ", " (symbol->string formal) ) )) 
 				(cdr formals)))
 		(string-append 
-			"\n(function(" js-formals ")\n{"
+			"\n(function(" js-formals ")\n{\n"
+				"\tvar __return__ = null;\n"
 				(compile-body body)
-				"\n\treturn" (compile-expr (cadr return)) ";\n"
+				;return should set __return__ var
+				(compile-expr return) ";\n"
+				"\n\treturn __return__;\n"
 			"})\n"
 		)))
 
@@ -150,26 +161,19 @@ const display  = function(a){console.log(a);};
 			(map (lambda(arg) 
 				(set! js-args (string-append js-args ", " (compile-expr arg)  )) )
 				(cdr args)))
-
 			(string-append " " 
 				js-proc "("
 				js-args")"
 			)))
 
-; 	lambda		=> anonymous function with return == last expr and wrapped with (function(formals){exprs...})
-;	car			=> list[0]
-; 	cdr			=> list.slice(1)
-;	quote 		=? just write symbol 
-; 	set!    	=> (set! var expr2 ) var = (compile-expr expr1)
-;	if      	=> use if(test){(compile-expr then)}else{ (compile-expr else ) }
-;	force  		??
-;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.lenght|| list.slice( i)
-;	list   		=>  (list  expr1 expr2 expr3 ... ) = [(compile expr), (compile expr2), (compile expr3) ... ]
-;	append 		=>  (append expr1 expr2 expr3 ... ) list.push( (compile expr) (compile expr2) (compile expr3)... );
-;	vector 		=> 		
-;	vector-set! => 	vec[i]=(compile-expr)
-;	vector-ref 	=> 	vec[i]
-;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
-;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
-;	display 	=> 		console.log((compile-expr expr));
-; return 		=> lambda return value
+(define (compile-return expr)
+	(string-append "\n\t__return__ =" (compile-expr expr) ))
+				
+(define (compile-if test then else)
+	
+		(string-append "\nif(" (compile-expr test) "){" 
+			(compile-expr then) ";\n}" 
+			(if (not (null? else))
+				(string-append "\nelse{" 
+					(compile-expr else) ";\n}") 
+				"\n")))

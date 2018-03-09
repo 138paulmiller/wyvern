@@ -22,10 +22,10 @@
 			(if try_file
 				(open-input-file (cadr args))
 				(current-input-port))))
-		(set! is-repl try_file)
+		(set! is-repl (not try_file))
 		(lambda ()
 				(if (not try_file)
-							(display ""))
+						(display ""))
 					(begin 
 						(set! line (port-line port))
 						(read port)))))

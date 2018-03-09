@@ -32,7 +32,7 @@
 (define (emit)
 	(cond 
 		((string=? target "-js")
-			 (emitjs (list (read-file)) outfile))
+			 (emitjs (read-file) outfile))
 		(else 
 			(display usage))))
 (if target
