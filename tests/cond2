@@ -1,18 +1,10 @@
+(define a 10)
+(define b 10)
+
 (cond 
-	((* a b ) 
+	(( < (* a b ) 0 ) 
 		(display "A"))
-	(b 
-		(display "B"))
+	((*  a b ) => display )
 	(else
 		(display "neither"))
 )
-(cond 
-	(a 
-		(display "A"))
-	(b =>
-		display)
-	(else 
-		(display "neither"))
-)
-
-(function args 1 2 3)

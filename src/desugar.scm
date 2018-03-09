@@ -45,7 +45,10 @@
 ;	valuen-i value accessor
 ;	values   value object (contains to be returned)
 ;	display
-;	primitives - (* / + - )
+;	primitives : ;		 __mul__ __div__ __add__ __sub__ __lt__  
+;						__gt__ __lte__ __gte__ __aeq__(arithemetic) __seq__(string ===)  __eq__  __eqv__   
+ 
+;	return : withlambdas to help determine return expr 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (declare (unit desugar))
 (use srfi-1)
@@ -84,13 +87,14 @@
 	(desugar-when 
 	(desugar-do
 	(desugar-define
+	(desugar-primitives	
 	(desugar-quote
 	(desugar-quasiquote
 	(desugar-prefix
 	(desugar-brackets	
 	(desugar-strings 
 	root
-	)))))))))))))))))))))))))
+	))))))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -143,6 +147,44 @@
 				( ( [ expr ... ] )  
 					`(,expr))
 				(_ root))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-primitives  
+;---------------------------------------------------------------------------------------------;
+; Transforms all primitive procedure references to their "mangled" procedure names 
+;	expressions wrapped with parentheses 
+;	E.g. * / + - < > <= >= = string=? (eq? eqv?)                        (arithmetic and string eq) 
+;		 __mul__ __div__ __add__ __sub__ __lt__  __gt__ __lte__ __gte__ __aeq__ __seq__ __eq__ __eqv__   
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-primitives root)	
+	(template-desugar 
+			desugar-primitives
+			(if (symbol? root)
+				(let ((sym-str (symbol->string root)))  
+					(cond 
+						((string=? sym-str "+"  ) '__add__)
+						((string=? sym-str "-"  ) '__sub__)
+						((string=? sym-str "*"  ) '__mul__)
+						((string=? sym-str "/"  ) '__div__)
+						((string=? sym-str "<"  ) '__lt__)
+						((string=? sym-str "<=" ) '__lte__)
+						((string=? sym-str ">"  ) '__gt__)
+						((string=? sym-str ">=" ) '__gte__)
+						((string=? sym-str "="  ) '__aeq__)
+						((string=? sym-str "eq?"  ) '__eq__)
+						((string=? sym-str "eqv?"  ) '__eqv__)
+						((string=? sym-str "string=?"  ) '__seq__)
+						(else 
+							root)))
+				root
+				)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-strings
@@ -1029,7 +1071,7 @@
 		desugar-lambda
 		(match root
 			( ('lambda (formals ... ) exprs ... expr )
-				`(lambda ,formals ,`(begin ,@(if (null? exprs) `(()) exprs)  ) ,`(return ,expr)  ))
+				`(lambda ,formals ,@exprs ,`(return ,expr)  ))
 			(_ root))))
 
 

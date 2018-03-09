@@ -2,6 +2,8 @@
 (declare (unit util))
 
 (define line 0) 
+(define target #f) 
+(define is-repl #f) 
 
 (define (port-line port) 
 	(let-values (((line _) (port-position port)))
@@ -14,14 +16,13 @@
 (define (make-reader ) 
 	(let* 
 		((args (command-line-arguments))
-		(try_file (pair? args))
+		(is_mode (and (pair? args) (set! target (car args))))
+		(try_file (and is_mode (pair? (cdr args))))
 		(port 
-		(if try_file
-			(open-input-file 
-				(if (pair? (cdr args))
-					(cadr args)
-					(car args)))
-			(current-input-port))))
+			(if try_file
+				(open-input-file (cadr args))
+				(current-input-port))))
+		(set! is-repl try_file)
 		(lambda ()
 				(if (not try_file)
 							(display ""))

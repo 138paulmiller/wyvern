@@ -1,12 +1,6 @@
 
-(declare (uses analyze))
-(declare (uses util))
-(declare (uses desugar))
-(declare (unit emitjs))
-(require-extension matchable)
-(use srfi-1) ;assoc
-;Does not rely on syntax manipulation since most features will fall through to JS (more transpile than compile)
 
+;Does not rely on syntax manipulation since most features will fall through to JS (more transpile than compile)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Ur-Scheme to JS  
 ;---------------------------------------------------------------------------------------------;
@@ -14,18 +8,18 @@
 ;	car			=> list[0]
 ; 	cdr			=> list.slice(1)
 ;	quote 		=? just write symbol 
-; 	set!    	=> (set! var expr2 ) var = (emitjs expr1)
-;	if      	=> use if(test){(emitjs then)}else{ (emitjs else ) }
+; 	set!    	=> (set! var expr2 ) var = (compile-expr expr1)
+;	if      	=> use if(test){(compile-expr then)}else{ (compile-expr else ) }
 ;	force  		??
-;	memv   		=>  i = list.findIndex((emitjs expr)); (i==list.lenght|| list.slice( i)
+;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.lenght|| list.slice( i)
 ;	list   		=>  (list  expr1 expr2 expr3 ... ) = [(compile expr), (compile expr2), (compile expr3) ... ]
 ;	append 		=>  (append expr1 expr2 expr3 ... ) list.push( (compile expr) (compile expr2) (compile expr3)... );
 ;	vector 		=> 		
-;	vector-set! => 	vec[i]=(emitjs)
+;	vector-set! => 	vec[i]=(compile-expr)
 ;	vector-ref 	=> 	vec[i]
 ;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
-;	values 		=> 	(values (emitjs  expr0) (emitjs  expr1) ... (emitjs  exprn)) = {0 : 0, 1:1, n:n};   
-;	display 	=> 		console.log((emitjs expr));
+;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
+;	display 	=> 		console.log((compile-expr expr));
 ;
 ;
 ;
@@ -52,7 +46,12 @@
 ; And each function call becomes trampoline((compile lambda))
 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+(declare (uses analyze))
+(declare (uses util))
+(declare (uses desugar))
+(declare (unit emitjs))
+(require-extension matchable)
+(use srfi-1) ;assoc
 ;returns pair or #f
 (define (get-def alist key )
 	(assoc key alist eqv? ) )
@@ -62,43 +61,115 @@
 	(alist-cons key datum alist ) )
 
 
-(define (emitjs root)
-	(if (pair? root)
-		(begin 
-			(emitjs (car root))
-			(emitjs (cdr root)))
-		(emit-ur root)
-	))
+(define (emitjs body filename)
+	(let ((out-port (open-output-file filename)))
+		(display (compile-primitives) out-port ) 
+		(display (compile-body body) out-port )))
+
+
+(define (compile-primitives)
+"
+const __add__ = function(a, b){return a+b;};
+const __sub__ = function(a, b){return a-b;};
+const __mul__ = function(a, b){return a*b;};
+const __div__ = function(a, b){return a/b;};
+const __lt__  = function(a, b){return a<b;};
+const __lte__  = function(a, b){return a<=b;};
+const __gt__  = function(a, b){return a>b;};
+const __gte__  = function(a, b){return a>=b;};
+const __ate__  = function(a, b){return a==b;};
+const __ste__  = function(a, b){return a===b;};
+const __eq__  = function(a, b){return _.isEqual(a,b);};
+const __eqv__  = function(a, b){return _.isEqual(a,b);};
+const display  = function(a){console.log(a);};
+"
+)
+
+(define (compile-body exprs)
+	(let ((js ""))
+		(map (lambda(expr)
+					(set! js (string-append js (compile-expr expr) ";\n" ) ))
+			exprs)
+
+		js))
 
 ;match the ur-scheme to produce
-(define (emit-ur expr)
-	; (match expr
-	; 	(
-	; 		)
-	; )
-	#f
-)
+(define (compile-expr expr)
+	(if (null? expr)
+		" "
+		(match expr
+			( ('lambda ( formals ... ) body ... return)
 
+				(compile-lambda formals body return))
+			( ( args ... )
+				(compile-proc (car args) (cdr args))
+				)
+			( _ 
+				(cond
+					((char? expr) (string expr))
+					((number? expr) (number->string expr))
+					((symbol? expr) (symbol->string expr))
+					((string? expr) expr)
+					(else 
+						(if (pair? expr)
+							(string-append 
+								(compile-expr (car expr))
+								(compile-expr (cdr expr)))
+							(and (display "\nError:Unhandled emit:")(display expr))
 
-(define (emit-lambda formals body return)
-	#f
-)
+						))))))
+			
 
+		)
 
+(define (compile-lambda formals body return)
+	(let (
+		(js-formals  (if (null? formals) "" 
+						(symbol->string  (car formals) ) )))
+		(if (not (null? formals))
+			;set remaining args sperated by commas
+			(map (lambda(formal) 
+					(set! js-formals (string-append js-formals ", " (symbol->string formal) ) )) 
+				(cdr formals)))
+		(string-append 
+			"\n(function(" js-formals ")\n{"
+				(compile-body body)
+				"\n\treturn" (compile-expr (cadr return)) ";\n"
+			"})\n"
+		)))
+
+(define (compile-proc proc args)
+
+	(let (
+		(js-args  (if (null? args) "" 
+					(compile-expr (car args) ) ))
+
+		(js-proc (compile-expr proc))
+		)
+		(if (not (null? args))
+			(map (lambda(arg) 
+				(set! js-args (string-append js-args ", " (compile-expr arg)  )) )
+				(cdr args)))
+
+			(string-append " " 
+				js-proc "("
+				js-args")"
+			)))
 
 ; 	lambda		=> anonymous function with return == last expr and wrapped with (function(formals){exprs...})
 ;	car			=> list[0]
 ; 	cdr			=> list.slice(1)
 ;	quote 		=? just write symbol 
-; 	set!    	=> (set! var expr2 ) var = (emitjs expr1)
-;	if      	=> use if(test){(emitjs then)}else{ (emitjs else ) }
+; 	set!    	=> (set! var expr2 ) var = (compile-expr expr1)
+;	if      	=> use if(test){(compile-expr then)}else{ (compile-expr else ) }
 ;	force  		??
-;	memv   		=>  i = list.findIndex((emitjs expr)); (i==list.lenght|| list.slice( i)
+;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.lenght|| list.slice( i)
 ;	list   		=>  (list  expr1 expr2 expr3 ... ) = [(compile expr), (compile expr2), (compile expr3) ... ]
 ;	append 		=>  (append expr1 expr2 expr3 ... ) list.push( (compile expr) (compile expr2) (compile expr3)... );
 ;	vector 		=> 		
-;	vector-set! => 	vec[i]=(emitjs)
+;	vector-set! => 	vec[i]=(compile-expr)
 ;	vector-ref 	=> 	vec[i]
 ;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
-;	values 		=> 	(values (emitjs  expr0) (emitjs  expr1) ... (emitjs  exprn)) = {0 : 0, 1:1, n:n};   
-;	display 	=> 		console.log((emitjs expr));
+;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
+;	display 	=> 		console.log((compile-expr expr));
+; return 		=> lambda return value
