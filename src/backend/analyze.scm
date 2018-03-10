@@ -29,5 +29,21 @@
 			`())))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; unique-values
+;---------------------------------------------------------------------------------------------;
+; List of all different length value objects created (__make_value1__ ... __make_valuen__ )
+;	Each value object is returned as a temporary parameters titled __value_t1__ ... __value_tm__ 
+;	NOTE: value_t (1..m is not length but rather which value object)
+;	whose components are accessed with  __get_valuen_i__(__value_t__) which is passed the value object
+;	add-unique-value Called during desugaring! 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		list of values types		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define unique-values '())
 
-
+(define (add-unique-value valuen)
+	(set! unique-values (lset-union eqv? unique-values (list valuen) )))

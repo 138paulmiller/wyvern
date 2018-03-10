@@ -4,11 +4,13 @@
 ;---------------------------------------------------------------------------------------------;
 ; define 		=> var sym = (compile expr)
 ; 	lambda		=> anonymous function with return == last expr and wrapped with (function(formals){exprs...})
+;   return 		=> lambda return value
+;	if      	=> use if(test){(compile-expr then)}else{ (compile-expr else ) }
+;	display 	=> 		console.log((compile-expr expr));
 ;	car			=> list[0]
 ; 	cdr			=> list.slice(1)
-;	quote 		=? just write symbol 
 ; 	set!    	=> (set! var expr2 ) var = (compile-expr expr1)
-;	if      	=> use if(test){(compile-expr then)}else{ (compile-expr else ) }
+;	quote 		=? just write symbol 
 ;	force  		??
 ;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.lenght|| list.slice( i)
 ;	list   		=>  (list  expr1 expr2 expr3 ... ) = [(compile expr), (compile expr2), (compile expr3) ... ]
@@ -18,9 +20,8 @@
 ;	vector-ref 	=> 	vec[i]
 ;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
 ;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
-;	display 	=> 		console.log((compile-expr expr));
-; return 		=> lambda return value
-;
+;	__make_valuen__ => return valuen( (compile exprs ...)) ;structure must be defined before hand!
+;	__get_valuen_i__ => return __value_t__.value_i //where value_t is the structure with attribute value_i
 ;---------------------------------------------------------------------------------------------;
 ; Tail-calls will be handled by having all user defined lambdas return thunks containing lambda body.
 ;	If the function is not tail call-recursive this will still work, it will just return a thunk that returns the value
@@ -53,16 +54,19 @@
 (declare (unit emitjs))
 (require-extension matchable)
 (use srfi-1) ;assoc
-;returns pair or #f
-(define (get-def alist key )
-	(assoc key alist eqv? ) )
+; ;returns pair or #f
+; (define (get-def alist key )
+; 	(assoc key alist eqv? ) )
 
-;returns pair or #f
-(define (add-def alist key datum )
-	(alist-cons key datum alist ) )
+; ;returns pair or #f
+; (define (add-def alist key datum )
+; 	(alist-cons key datum alist ) )
 
 
 (define (emitjs body filename)
+	(display"ValueS:")
+	(display unique-values)
+	(newline)
 	(let ((source (string-append (compile-primitives) (compile-body body) )))
 		(display source (open-output-file filename) )
 		))
@@ -71,6 +75,7 @@
 (define (compile-primitives)
 ;change to accept lists? or desugar all vararg to binary (* 1 2 ... n ) => (__mul__ 1 (__mul__ 2 (... n ) ) )
 "
+
 const __add__ = function(a, b){return a+b;};
 const __sub__ = function(a, b){return a-b;};
 const __mul__ = function(a, b){return a*b;};
@@ -84,6 +89,8 @@ const __ste__  = function(a, b){return a===b;};
 const __eq__  = function(a, b){return _.isEqual(a,b);};
 const __eqv__  = function(a, b){return _.isEqual(a,b);};
 const display  = function(a){return console.log(a);};
+const and  = function(a, b){if(a&&b) return b; else return false;};
+const or  = function(a, b){if(a) return a; else if(b) return b; else return false;};
 "
 )
 
@@ -108,6 +115,8 @@ const display  = function(a){return console.log(a);};
 				(compile-if test then else))
 			( ('return expr) 
 				(compile-return expr))
+			( ('define sym expr) 
+				(compile-define sym expr))
 			;check if application after special forms
 			( ( args ... )
 				(compile-proc (car args) (cdr args)))
@@ -125,15 +134,12 @@ const display  = function(a){return console.log(a);};
 								(compile-expr (cdr expr)))
 							(and (display "\nError:Unhandled emit:")(display expr))
 
-						))))))
-			
-
-		)
+						)))))))
 
 (define (compile-lambda formals body return)
 	(let (
 		(js-formals  (if (null? formals) "" 
-						(symbol->string  (car formals) ) )))
+					(symbol->string  (car formals) ) )))
 		(if (not (null? formals))
 			;set remaining args sperated by commas
 			(map (lambda(formal) 
@@ -146,11 +152,10 @@ const display  = function(a){return console.log(a);};
 				;return should set __return__ var
 				(compile-expr return) ";\n"
 				"\n\treturn __return__;\n"
-			"})\n"
-		)))
+			"})")))
+
 
 (define (compile-proc proc args)
-
 	(let (
 		(js-args  (if (null? args) "" 
 					(compile-expr (car args) ) ))
@@ -166,11 +171,15 @@ const display  = function(a){return console.log(a);};
 				js-args")"
 			)))
 
+
 (define (compile-return expr)
 	(string-append "\n\t__return__ =" (compile-expr expr) ))
 				
-(define (compile-if test then else)
-	
+
+(define (compile-define sym expr)
+	(string-append "\nvar " (symbol->string sym) " =" (compile-expr expr)))
+
+(define (compile-if test then else)	
 		(string-append "\nif(" (compile-expr test) "){" 
 			(compile-expr then) ";\n}" 
 			(if (not (null? else))

@@ -52,6 +52,7 @@
 ;	return : withlambdas to help determine return expr 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (declare (unit desugar))
+(declare (uses analyze))
 (use srfi-1)
 (require-extension matchable)
 (require-extension r7rs)
@@ -69,6 +70,7 @@
 
 (define (desugar root)
 	;ordered desugaring, some phases use sugared syntax
+	(desugar-values
 	(desugar-return
 	(desugar-lambda
 	(desugar-delay
@@ -95,7 +97,7 @@
 	(desugar-brackets	
 	(desugar-strings 
 	root
-	))))))))))))))))))))))))))
+	)))))))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -538,7 +540,7 @@
 ;		temporary symbol 		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (get-temp-symbol var)
-	(string->symbol (string-append "___" (symbol->string var) "___" )))
+	(string->symbol (string-append "__" (symbol->string var) "__" )))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -879,7 +881,7 @@
 	(let ((r 0 ))
 		(lambda ( )
 			(set! r (+ r 1))
-			(string-append  " record-" (number->string r)))))
+			(string->symbol (string-append  " __value_t" (number->string r) "__")))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -900,9 +902,11 @@
 		(let ((i 0 )(n (length val)))
 			(lambda ()
 				(set! i (+ i 1))
-				(string->symbol (string-append "value" 
-								(number->string n) "-"				
-								(number->string i))))))
+				(string->symbol (string-append "__get_value" 
+								(number->string n) "_"				
+								(number->string i)
+								"__"
+								)))))
 
 
 
@@ -1079,10 +1083,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-return
 ;---------------------------------------------------------------------------------------------;
-; Finds last inner-most expr of a lambda 
+; Finds last inner-most expr of a lambda and create a return call
 ;---------------------------------------------------------------------------------------------;
 ;	params:
-;		root : lambda-expr
+;		root : root expr
 ;	return:
 ;		last expr		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1102,6 +1106,27 @@
 							,(desugar-return `(return ,then) ) 
 							,(desugar-return `(return ,else) )))
 					(_ root)))
+			;if symbol is found
+			(_ root))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-values
+;---------------------------------------------------------------------------------------------;
+; Translates (values x1 ... xn) => (__valuen__ x1 .. xn) 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : lambda-expr
+;	return:
+;		last expr		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-values root)
+	(template-desugar 
+		desugar-values
+		(match root
+			(('values datums ... )
+				(let ((valuen  (string->symbol (string-append "__make_value" (number->string (length datums)) "__" ))  ))
+					(add-unique-value valuen)
+					`( ,valuen ,@datums)))
 			;if symbol is found
 			(_ root))))
 
