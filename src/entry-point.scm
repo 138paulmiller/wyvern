@@ -15,26 +15,30 @@
 		(let* (	(expr (reader)))
 			(cond ( (not (eof-object? expr))
 				(let ((result-expr  (desugar expr))) 
-					(cond 
-						((string=? target "-js")
-							 (emitjs (list result-expr) outfile))
-						(else 
-							(display usage)))
+					(if (check-target)
+						(cond 
+							((string=? (get-target) "-js")
+								 (emitjs (list result-expr) #f))
+							(else 
+								(display usage)))
+						(display usage))
 					(repl))))))
 
 (define (read-file)
 		(let* (	(expr (reader)))
 			(if (not (eof-object? expr))
-					(append (list  (desugar expr)   ) (read-file))
-					'()
-					)))
+					(append (list  (desugar expr) ) (read-file))
+					'())))
 
 (define (emit)
-	(cond 
-		((string=? target "-js")
-			 (emitjs (read-file) outfile))
-		(else 
-			(display usage))))
+	(if (check-target)
+		(let ((exprs (read-file)))
+			(cond 
+				((string=?  (get-target) "-js")
+					 (emitjs exprs outfile))))
+		(display usage)))
+
+
 (if target
 	(if is-repl
 		(repl)

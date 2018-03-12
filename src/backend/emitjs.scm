@@ -12,16 +12,14 @@
 ; 	set!    	=> (set! var expr2 ) var = (compile-expr expr1)
 ;	quote 		=? just write symbol 
 ;	force  		??
-;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.lenght|| list.slice( i)
+;	memv   		=>  i = list.findIndex((compile-expr expr)); (i==list.length|| list.slice( i) )
 ;	list   		=>  (list  expr1 expr2 expr3 ... ) = [(compile expr), (compile expr2), (compile expr3) ... ]
 ;	append 		=>  (append expr1 expr2 expr3 ... ) list.push( (compile expr) (compile expr2) (compile expr3)... );
 ;	vector 		=> 		
 ;	vector-set! => 	vec[i]=(compile-expr)
 ;	vector-ref 	=> 	vec[i]
-;	valuen-i  	=> 	valuen-i = get_value_n(value_n_obj, i){return value_n_obj[i];}
-;	values 		=> 	(values (compile-expr  expr0) (compile-expr  expr1) ... (compile-expr  exprn)) = {0 : 0, 1:1, n:n};   
-;	__make_valuen__ => return valuen( (compile exprs ...)) ;structure must be defined before hand!
-;	__get_valuen_i__ => return __value_t__.value_i //where value_t is the structure with attribute value_i
+;	__make_value__  (__make_value__ n args ...) creates a value object of n dimensions 
+;	__get_value__   (__get_value__ i value_object) get ith component of value object 
 ;---------------------------------------------------------------------------------------------;
 ; Tail-calls will be handled by having all user defined lambdas return thunks containing lambda body.
 ;	If the function is not tail call-recursive this will still work, it will just return a thunk that returns the value
@@ -45,8 +43,6 @@
 ; And each function call becomes trampoline((compile lambda))
 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Test on http://www.webtoolkitonline.com/javascript-tester.html
-; Does not rely on syntax manipulation since most features will fall through to JS (more transpile than compile)
 
 (declare (uses analyze))
 (declare (uses util))
@@ -62,19 +58,35 @@
 ; (define (add-def alist key datum )
 ; 	(alist-cons key datum alist ) )
 
-
 (define (emitjs body filename)
+	(display body)
 	(display"ValueS:")
-	(display unique-values)
 	(newline)
-	(let ((source (string-append (compile-primitives) (compile-body body) )))
-		(display source (open-output-file filename) )
+	(let ((source (string-append (compile-primitives) (compile-values) (compile-body body) )))
+		
+		(display source (if filename (open-output-file filename) (current-output-port) ))
 		))
 
+;compiles the value objects and accessors 
+(define (compile-values)
+	;for each valuen, create valuen (__make_valuen__ ) and accessors (__get_valuen_0__ ... __get_valuen_n-1__) 
+	(fold-right 
+		(lambda (valuen str) 
+			(symbol->string valuen)	
+		)
+	"" unique-values 
+	)
+
+)
 
 (define (compile-primitives)
 ;change to accept lists? or desugar all vararg to binary (* 1 2 ... n ) => (__mul__ 1 (__mul__ 2 (... n ) ) )
-"
+"const err = function(msg){ console.log(\"ERROR\"+msg);  };
+const display = function(a){ return console.log(a);  };
+const __empty_list__ = null;
+const cons  = function(a, b){var l = [a]; if(b != null) l = l.concat(b); return l;};
+const car  = function(a){if(a==__empty_list__) return err(\"Cannot car empty list\"); else return a[0];};
+const cdr  = function(a){if(a==__empty_list__) return err(\"Cannot cdr empty list\"); else return a.splice(1);};
 
 const __add__ = function(a, b){return a+b;};
 const __sub__ = function(a, b){return a-b;};
@@ -88,9 +100,11 @@ const __ate__  = function(a, b){return a==b;};
 const __ste__  = function(a, b){return a===b;};
 const __eq__  = function(a, b){return _.isEqual(a,b);};
 const __eqv__  = function(a, b){return _.isEqual(a,b);};
-const display  = function(a){return console.log(a);};
 const and  = function(a, b){if(a&&b) return b; else return false;};
 const or  = function(a, b){if(a) return a; else if(b) return b; else return false;};
+
+const __make_value__  = function(n, value_list){return value_list;};
+const __get_value__  = function(i, value){return value[i-1];};
 "
 )
 
@@ -109,6 +123,8 @@ const or  = function(a, b){if(a) return a; else if(b) return b; else return fals
 			( ('lambda ( formals ... ) body ... return)
 				(compile-lambda formals body return))
 			;check special forms
+			( ()
+				"")
 			( ( 'if test then  )
 				(compile-if test then '()))
 			( ( 'if test then else)
@@ -119,7 +135,7 @@ const or  = function(a, b){if(a) return a; else if(b) return b; else return fals
 				(compile-define sym expr))
 			;check if application after special forms
 			( ( args ... )
-				(compile-proc (car args) (cdr args)))
+					(compile-proc (car args) (cdr args)))
 
 			( _ 
 				(cond
@@ -156,6 +172,8 @@ const or  = function(a, b){if(a) return a; else if(b) return b; else return fals
 
 
 (define (compile-proc proc args)
+	; (display proc )(read-line)
+	; 	(display args)(read-line)
 	(let (
 		(js-args  (if (null? args) "" 
 					(compile-expr (car args) ) ))

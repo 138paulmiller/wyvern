@@ -38,18 +38,20 @@
 ;	if
 ;	force  ? ???
 ;	memv   ? (can be defined with eq? and cdr)
-;	list
+;	cons
 ;	append ? (can defined with set! and cdr)
 ;	vector
 ;	vector-set!
 ;	vector-ref
-;	valuen-i value accessor
-;	values   value object (contains to be returned)
+;	__make_value__  (__make_value__ n args ...) creates a value object of n dimensions 
+;	__get_value__   (__get_value__ i value_object) get ith component of value object 
 ;	display
-;	primitives : ;		 __mul__ __div__ __add__ __sub__ __lt__  
-;						__gt__ __lte__ __gte__ __aeq__(arithemetic) __seq__(string ===)  __eq__  __eqv__   
- 
-;	return : withlambdas to help determine return expr 
+;	primitives
+;		 __mul__ __div__ __add__ __sub__ __lt__  
+;		__gt__ __lte__ __gte__ __aeq__(arithemetic) __seq__(string ===)  __eq__  __eqv__  
+;	__empty_list__ = empty list object
+;						 
+;	return  added to help determine return expr in lambda exprs 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (declare (unit desugar))
 (declare (uses analyze))
@@ -70,6 +72,7 @@
 
 (define (desugar root)
 	;ordered desugaring, some phases use sugared syntax
+	(desugar-list
 	(desugar-values
 	(desugar-return
 	(desugar-lambda
@@ -97,7 +100,7 @@
 	(desugar-brackets	
 	(desugar-strings 
 	root
-	)))))))))))))))))))))))))))
+	))))))))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -187,6 +190,34 @@
 							root)))
 				root
 				)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-literals  
+;---------------------------------------------------------------------------------------------;
+; Transforms all primitive procedure references to their "mangled" procedure names 
+;	expressions wrapped with parentheses 
+;	E.g. #f #t #\c => false, true, 'c' ...   
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : root expression
+;	return:
+;		new formed expression
+;		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-literals root)	
+	(template-desugar 
+			desugar-literals
+			(if (symbol? root)
+				(let ((sym-str (symbol->string root)))  
+					(cond 
+						((or (string=? sym-str "#f") (string=? sym-str "#false")) 'false)
+						((or (string=? sym-str "#t") (string=? sym-str "#true")) 'true)
+						;Transforms #\<char> => 'char'
+						(else 
+							root)))
+				root
+				)))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -890,8 +921,8 @@
 ; Let value helper used to construct a procedure to get the name of procedure to access each
 ;	compenent of the record object.
 ; Given a record object of dimension n, it's components can be accessed valuen-i
-; The procedure return is used to get the next i in the function valuen-i
-; valuen-i should compile to valuen-1, valuen-2,  ...  valuen-n .. 
+; The procedure return is used to get the next i in the function call (get_value i obj) 
+; valuen-i should compile to value 1, value 2,  ...  value n .. 
 ; 
 ;---------------------------------------------------------------------------------------------;
 ;	params:
@@ -902,11 +933,8 @@
 		(let ((i 0 )(n (length val)))
 			(lambda ()
 				(set! i (+ i 1))
-				(string->symbol (string-append "__get_value" 
-								(number->string n) "_"				
-								(number->string i)
-								"__"
-								)))))
+				`( ,(string->symbol (string-append "__get_value__")) 
+					,(number->string i)))))
 
 
 
@@ -917,9 +945,9 @@
 ;let values uses the record approach to return a record object and access individual values
 ; ((let-values ((vars expr) ...) body ...)
 ; (let ( ((record1 expr) ... (recordn exprn) ) ) 
-; 	(let ( (var1 (valuen_1 record))
+; 	(let ( (var1 (value i record))
 ; 			...
-; 			(varn (valuen_n record)))
+; 			(varn (value n record)))
 ; 	 body))
 ;---------------------------------------------------------------------------------------------;
 ;	params:
@@ -952,7 +980,7 @@
 												(get-record-component (make-get-record-component val)))
 										 	; for each component of val, slice list into parent list
 											(map  
-												(lambda (comp) `(,comp (,(get-record-component) ,record-name)  ))
+												(lambda (comp) `(,comp (,@(get-record-component) ,record-name)  ))
 												val))))
 									 	`(,@left ,@right)))
 								     '()  vals)))
@@ -984,36 +1012,43 @@
 		(template-desugar 
 			desugar-let*-values 
 			(match  root
+				(('let*-values () body )
+					;create the value proc "getter"
+					body
+					)
 				(('let*-values ((vals exprs) ...) body ...)
 					;create the value proc "getter"
 					(let* ( 
 							;get all record names, wrap proc in lambda that takes an arg
-							(record-names (map 
-								((lambda ()
-								(let ((get-record-name (make-get-record-name)))
-									(lambda (val) (get-record-name) ))))
-								vals))
-							;create a name getter for the binding to use
-							(get-record-name (make-get-record-name))
-							(bindings   
-								;for each value
-								(fold-right 
-									(lambda (val right)
-									 (let ((left 
-										(let ((record-name (get-record-name) )
-												;for each value create the accessor 
-												(get-record-component (make-get-record-component val)))
-										 	; for each component of val, slice list into parent list
-											(map  
-												(lambda (comp) `(,comp (,(get-record-component) ,record-name)  ))
-												val))))
-									 	`(,@left ,@right)))
-								     '()  vals)))
-						`((lambda ,record-names
-							,(desugar-let* `(let* ,bindings
-								,@(desugar-let*-values body) )))
-						,@(desugar-let*-values exprs) )))
+							(get-record-name (make-get-record-name))						
+							(binding
+								(let (;for each value create the accessor 
+									(get-record-component (make-get-record-component (car vals))))
+									 	; for each component of val, slice list into parent list
+										(map  
+											(lambda (comp) `(,comp (,@(get-record-component) __value_t__)  ))
+											(car vals)))))
+	
+								(desugar-let  
+									`(let (( __value_t__ ,(desugar-let*-values (car exprs))))
+										,(desugar-let 
+											`(let ,binding 
+												,(desugar-let*-values
+													`(let*-values  ,(create-bindings (cdr vals) (cdr exprs) ) 
+														,@body) ))))  
+								 ))
+						
+
+
+						)
 				(_  root))))
+
+(define (create-bindings ids exprs )
+	(if (null? ids)
+		'()
+		(append 
+			(list `(,(car ids),(car exprs)))
+			(create-bindings (cdr ids) (cdr exprs)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-force
@@ -1072,11 +1107,13 @@
 ;		new formed expression		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (desugar-lambda root)
+
 	(template-desugar 
 		desugar-lambda
 		(match root
-			( ('lambda (formals ... ) exprs ... expr )
-				`(lambda ,formals ,@exprs ,`(return ,expr)  ))
+			( ('lambda (formals ... ) exprs ...  )
+				;set return result for each line (until figure out analysis to find last call)
+				`(lambda ,formals ,@(map (lambda(expr) `(return ,expr) ) exprs  )))
 			(_ root))))
 
 
@@ -1112,7 +1149,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; desugar-values
 ;---------------------------------------------------------------------------------------------;
-; Translates (values x1 ... xn) => (__valuen__ x1 .. xn) 
+; Translates (values x1 ... xn) => (__make_value__ n (list x1 .. xn)) 
 ;---------------------------------------------------------------------------------------------;
 ;	params:
 ;		root : lambda-expr
@@ -1124,11 +1161,32 @@
 		desugar-values
 		(match root
 			(('values datums ... )
-				(let ((valuen  (string->symbol (string-append "__make_value" (number->string (length datums)) "__" ))  ))
-					(add-unique-value valuen)
-					`( ,valuen ,@datums)))
+					`( ,(string->symbol (string-append "__make_value__" )) ,(length datums) (list ,@datums)))
 			;if symbol is found
 			(_ root))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-list
+;---------------------------------------------------------------------------------------------;
+; Translates (list x1 x2 ... xn ) = (cons (x1 (cons x2 (... (cons xn '() )))) 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : lambda-expr
+;	return:
+;		last expr		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-list root)
+	(template-desugar 
+		desugar-list
+		(match root
+			(('list datum datums ... )
+				`(cons  ,datum (list ,@datums)))
+
+			(('list )
+				'__empty_list__)  
+			;if symbol is found
+			(_ root))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;WIP;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;delay and delay force helpers

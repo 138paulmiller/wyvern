@@ -14,6 +14,3 @@
 	((c d e) (values a b 3) )) 
 	(display ( *  c d ) ))
 
-
-
-
