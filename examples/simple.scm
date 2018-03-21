@@ -3,5 +3,12 @@
 		(display b) 
 		(display c))) 
 
-(a 3 ( + 8 8 ))
-(a 30 ( + 8 8 ))
+
+(define (tail_call)
+	(a 3 ( + 8 8 ))
+	(a 30 ( + 8 8 ))
+	(tail_call)
+)
+
+(tail_call)
+

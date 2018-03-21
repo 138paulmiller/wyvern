@@ -21,38 +21,56 @@ const and  = function(a, b){if(a&&b) return b; else return false;};
 const or  = function(a, b){if(a) return a; else if(b) return b; else return false;};
 
 const __make_value__  = function(n, value_list){return value_list;};
-const __get_value__  = function(i, value){return value[i-1];};
- 
-(function(__value_t__)
+const __get_value__  = function(i, value){if(value!=null)return value[i-1];};
+//trampoline for functions 
+
+function __call__(func) {
+  while(func && typeof func === 'function') {
+    func = func()
+  }
+  return func;
+}
+
+
+
+var a =(function(b, c)
 {
 	var __return__ = null;
 
-	__return__ = 
-(function(a, b)
+if(__call__(function(){ 
+return __gt__(b, c)})){
+	__return__ = __call__(function(){ 
+return display(b)});
+}
+else{
+	__return__ = __call__(function(){ 
+return display(c)});
+};
+
+	return __return__;
+});
+
+
+var tail_call =(function()
 {
 	var __return__ = null;
 
-	__return__ = 
-(function(__value_t__)
-{
-	var __return__ = null;
+	__return__ = __call__(function(){ 
+return a(3, __call__(function(){ 
+return __add__(8, 8)}))});
 
-	__return__ = 
-(function(c, d, e)
-{
-	var __return__ = null;
 
-	__return__ = display( __mul__(c, d));
+	__return__ = __call__(function(){ 
+return a(30, __call__(function(){ 
+return __add__(8, 8)}))});
 
-	return __return__;
-})( __get_value__(1, __value_t__),  __get_value__(2, __value_t__),  __get_value__(3, __value_t__));
+
+	__return__ = __call__(function(){ 
+return tail_call()});
 
 	return __return__;
-})( __make_value__(3,  cons(a,  cons(b,  cons(3, __empty_list__)))));
+});
 
-	return __return__;
-})( __get_value__(1, __value_t__),  __get_value__(2, __value_t__));
-
-	return __return__;
-})( __make_value__(2,  cons(3,  cons(4, __empty_list__))));
+__call__(function(){ 
+return tail_call()});
 
