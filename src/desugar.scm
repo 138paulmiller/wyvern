@@ -1111,7 +1111,10 @@
 	(template-desugar 
 		desugar-lambda
 		(match root
-			( ('lambda (formals ... ) exprs ...  )
+			; ( ('lambda (formals ... ) exprs ... expr )
+			; 	;set return result for each line (until figure out analysis to find last call)
+			; 	`(lambda ,formals ,@exprs  ,`(return ,expr)  ))
+			( ('lambda (formals ... ) exprs ... )
 				;set return result for each line (until figure out analysis to find last call)
 				`(lambda ,formals ,@(map (lambda(expr) `(return ,expr) ) exprs  )))
 			(_ root))))

@@ -104,7 +104,17 @@ const and  = function(a, b){if(a&&b) return b; else return false;};
 const or  = function(a, b){if(a) return a; else if(b) return b; else return false;};
 
 const __make_value__  = function(n, value_list){return value_list;};
-const __get_value__  = function(i, value){return value[i-1];};
+const __get_value__  = function(i, value){if(value!=null)return value[i-1];};
+//trampoline for functions 
+
+function __call__(func) {
+  while(func && typeof func === 'function') {
+    func = func()
+  }
+  return func;
+}
+
+
 "
 )
 
@@ -162,7 +172,7 @@ const __get_value__  = function(i, value){return value[i-1];};
 					(set! js-formals (string-append js-formals ", " (symbol->string formal) ) )) 
 				(cdr formals)))
 		(string-append 
-			"\n(function(" js-formals ")\n{\n"
+			"(function(" js-formals ")\n{\n"
 				"\tvar __return__ = null;\n"
 				(compile-body body)
 				;return should set __return__ var
@@ -184,14 +194,15 @@ const __get_value__  = function(i, value){return value[i-1];};
 			(map (lambda(arg) 
 				(set! js-args (string-append js-args ", " (compile-expr arg)  )) )
 				(cdr args)))
-			(string-append " " 
-				js-proc "("
-				js-args")"
+			(string-append 
+				"__call__(function(){ \nreturn " js-proc 
+					"(" js-args")"
+				"})"
 			)))
 
 
 (define (compile-return expr)
-	(string-append "\n\t__return__ =" (compile-expr expr) ))
+	(string-append "\n\t__return__ = " (compile-expr expr)))
 				
 
 (define (compile-define sym expr)
