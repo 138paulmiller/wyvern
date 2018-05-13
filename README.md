@@ -2,11 +2,17 @@
 Scheme Transpiler 
 
 #### Dependencies 
-- Chicken Scheme
+Chicken Scheme, with r7rs and mathable extensions
 
 	sudo apt-get install chicken
 	sudo chicken-install r7rs	 
 	sudo chicken-install matchable
+
+#### Usage 
+	wyvern -js <file.scm>
+	
+This will generate a javascript file out.js in the calling directory. 
+Beforewarned, as of now the javascript is very messy, and nearly unreadable.
 
 #### Supports
 - cond			
@@ -31,21 +37,8 @@ Scheme Transpiler
 - unquote-splicing
 - tail call optimization 
 
-#### Usage 
-	wyvern -js <file.scm>
-	
-This will generate a javascript file out.js in the calling directory. 
-Beforewarned, as of now the javascript is very messy, and nearly unreadable.
 
-
-#### Desugar and Code Gen
-Each derived expression will have a corresponding micro-pass that will desugar the expression in terms of core scheme expression. Using pattern-matching, each derived expression is transformed into it's core represention.
-
-
-
-
-
-##### Future
+##### Future 
 
 - [ ] Code clean-up
 - [ ] Add more functionality fo Javascript backend.
