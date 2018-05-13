@@ -6,19 +6,16 @@ Adviser Prof Kevin Wortman Ph.D
 
 ### Motivation
 
-Scheme has little influence on major software projects out today. So, how could Scheme adapt in order to maintain a language of choice for developers? One answer would be to improve the standard library or to increase usability amongst modern tools, such as a Scheme frontend into the Qt Framework. While others may argue that an improvement of the syntax may bring in more users. 
+Scheme has little influence on any contemporary open-source projects. So, how can the Scheme language adapt in order to become a primary language of choice for open-source developers? One answer would be to improve the standard library or to increase usability amongst modern tools, such as a Scheme frontend into the Qt Framework. While others may argue that an improvement of the syntax may bring in more users. 
 
-For this project, we decided to help push Scheme into the world of Web Applications by creating a Scheme to JavaScript transpiler. This will allow users to develop client or server side Scheme applications  that will make use of many of the features built into Javascript. 
+For this project, we decided to help push Scheme into the world of Web Applications by creating a Scheme to JavaScript transpiler. This will allow users to develop client or server side Scheme applications that will make use of many of the features built into Javascript. 
 
 ### Approach
 
-Initially, this project was going to be written in Python and include modules for Tokenizing and Parsing Scheme syntax into an Abstract-Syntax-Tree (AST).  The transpiler would then pass the AST through multiple micropasses that would reconstruct the syntax into a core representation of the language. However a change in the design occurred after consulting with Professors Kevin Wortman and Kenytt Avery, that led the transpiler to be written in Scheme. I decided on the Chicken Scheme implementation because of their module system that simplifies extension installation. By making this change, the AST parsing was greatly simplified by employing Scheme’s built-in read procedure. 
-This procedure read from the import port and returned a list representation of the program. 
+Initially, this project was going to be written in Python and include modules for Tokenizing and Parsing Scheme syntax into an Abstract-Syntax-Tree (AST).  The transpiler would then pass the AST through multiple micropasses, each of which reconstruct the syntax into a core representation of the language. However a change in the design occurred, after consulting with Professors Kevin Wortman and Kenytt Avery, that led to the transpiler to be written in Scheme. I decided on the Chicken Scheme implementation because of Chicken's module system simplifies extension installation. By making this change, the AST parsing was greatly simplified by employing Scheme’s built-in __read__ procedure. The procedure __read__ reads from the import port and returns a list representation of the program. The beauty of Scheme is that the AST and the data returned from the read procedure are identical, being that a preorder traversal of the AST is itself a list.   
 
-This became the seed AST. After reviewing the syntax of R7RS Scheme, designing the core Scheme representation became more clear. The core representation is variation of Scheme that provides only minimal features, all of which can be used to derive other features. 
-The let expression is the simplest example of an derived expression consisting of only lambda expressions. Because Scheme is almost a purely functional language, it is encouraged to program in a purely functional manner. 
-
-Since variable assignments, such as let, are outside this paradigm, it would make sense that these do not belong in the core representation. For Scheme, it can be shown that all let expressions are merely lambda expressions. 
+This became the seed AST. After reviewing the syntax of R7RS Scheme, the task of designing the core Scheme representation became more clear over time. The core representation is variation of Scheme that provides only minimal features, all of which can be used to derive other features. 
+The let expression is the simplest example of an derived expression consisting of only lambda expressions. Because Scheme is almost a purely functional language, it is encouraged to program in a purely functional manner. Since variable assignments, such as let, are outside this paradigm, it would make sense that these do not belong in the core representation. For Scheme, it can be shown that all let expressions are merely lambda expressions. 
 
 Below is an example of achieving let behavior using only lambdas. 
 
@@ -48,12 +45,12 @@ Below is example of deriving let* using lambda expressions.
           (+ a a)))  
        3)
 
-After discussion with Professor Wortman, I concluded that pattern matching would greatly simplify AST reconstruction process. So a pattern matching Chicken Scheme Extension  matchable was used to achieve the syntax transformations,  otherwise known as desugaring.
+After discussion with Professor Wortman, I concluded that pattern matching would greatly simplify AST reconstruction process. So a pattern matching Chicken Scheme Extension matchable was used to achieve the syntax transformations, colloquially known as desugaring.
 Implementation
 
 The transpiler is broken up into four major modules, entry_point, desugar,  frontend, and  backend.
 
-The entry_point defines the repl as well handling command-line arguments. After reading the input from the input port, the entry_point sends the AST to the desugar module. 
+The entry_point defines the repl as well handling command-line arguments. After reading the builtin list AST from the input port, the entry_point sends the AST to the desugar module. 
 
 The desugar module reconstructs the input AST into an AST representation using only core features of the language. Each pass makes use of the matchable extension to capture the relevant data from the AST. The reconstruction is achieved by defining procedures that will reconstruct a single derived expression into its core representation.
 
@@ -76,7 +73,9 @@ The result of each pass is then passed down to the next procedure. Some passes d
 
 In the desugar stage, some expressions are reconstructed to make use of procedures that do not exist in Scheme, but are a component of the core scheme and are defined as primitive procedures in the backend runtime. For example, let-values is translated into an AST that calls a procedure __make-valueN__ which returns a  __valueN__ object. The value object’s elements are accessed with __get__valueN_i__ where N is number of values and i is the ith value. Each value object returns is passed into a parameter named __value_tX__ where x is a unique number used to identify the value object. 
 
-For a better explanation of this reconstruction solution, an example of this transformation can be seen below. It is not the most elegant solution, but it works for now Notice that each value is really just a list. 
+For a better explanation of this reconstruction solution, an example of this transformation can be seen below. It is not the most elegant solution, but it works for now.
+
+Notice that each value is really just a list and the symbols a and b become implicit references to elements of the list. 
 
     (let-values (((a b) (values 1 2)))
         (display a) (display b) )
@@ -94,14 +93,14 @@ The current version of this transpiler does not currently support make-promise, 
 
 After the AST is reconstructed, it is passed into the target specific backend. This portion of the code handles the code generation stage. There exist various helper procedures in the analyze module. As of now, there are only two procedures, only one of which is being used. The unused procedure is used to return the list of the free variables of a given lambda expression. The other is used to produce a set of all unique __value__t_ objects that are instantiated. 
 
-Currently, the only backend implemented is Javascript. The desugaring stages also rename most of the Scheme primitives, expecting that these primitives will be defined in the target runtime. There are a series of primitives functions defined in Javascript that must be defined in order for much of the core Scheme functionality to work. One such example can be seen below. 
+Currently, the only backend implemented is Javascript. The desugaring stages also rename most of the Scheme primitives, expecting that these primitives will be defined in the target runtime. IN the current design, a series of primitive functions implemented in Javascript must be defined in order for much of the core Scheme functionality to work. One such example can be seen below. 
 
     (list 1 (+2 3) 4 “Hello”)
 desugared => 
 
     (cons 1 ( cons (__add__ 2 3) (cons 4 (cons “Hello” __empty_list__) )))
 
-JS Runtime
+Notice that the Javascript Runtime relies on the following definitions:
 
     const __empty_list__ = null; 
     const cons = function(a, b){var l = [a]; if(b != null) l = l.concat(b); return l;};
@@ -197,7 +196,9 @@ the same generated code cleaned up by hand =>
 Because the generated code is unreadable, making it difficult to debug, the next stage in development would be to generate code similar to the cleaned up version. This will hopefully simplify targeting backends like C and LLVM where anonymous functions can not be exploited)
 
 ### Looking Back 
-Understanding the pros and cons of using one language over another would have prevented the major project redesign that occured during development.  Before this project, I knew nothing about pattern-matching as an syntax analysis method. Besides the usage of regular expressions discussed in the Compilers and Theory of Computation courses, I was only aware of using patterns to define tokens, not necessarily syntactic reconstruction.  
+Understanding the pros and cons of using one language over another would have prevented the major project redesign that occured during development. Before this project, I knew nothing about pattern-matching as an syntax analysis method. Besides the usage of regular expressions discussed in the Compilers and Theory of Computation courses, I was only aware of using patterns to define tokens, not necessarily syntactic reconstruction. 
+
+During development, I also learned a lot oabout language implementation methods and how much variance can exists, espcecially in a lightly standardized language like Scheme. A majority of the features of Scheme seemed like magic at first, but after learning about different implementation methods, as well as deconstructing any derived expressions, I discovered that the core of Scheme is fairly simple, albeit it is still greatly different from most imperitive languages.   
     
 ### See Also
 
