@@ -3,12 +3,15 @@
 		(display b) 
 		(display c))) 
 
-
-(define (tail_call)
 	(a 3 ( + 8 8 ))
 	(a 30 ( + 8 8 ))
-	(tail_call)
+
+(define (tail_call depth)
+(let (( log (getElementById "log") )) 
+	(setInnerHTML log (+ (getInnerHTML log) (string depth)))
+	(if (> depth 0)
+		(tail_call (- depth 1))
+	)
+	)
 )
-
-(tail_call)
-
+(tail_call  1000)

@@ -76,6 +76,7 @@
 	(desugar-values
 	(desugar-return
 	(desugar-lambda
+	(desugar-if
 	(desugar-delay
 	(desugar-delay-force
 	(desugar-begin
@@ -100,7 +101,7 @@
 	(desugar-brackets	
 	(desugar-strings 
 	root
-	))))))))))))))))))))))))))))
+	)))))))))))))))))))))))))))))
 
 ;;Unused for now
 (define (syntax-error msg root)
@@ -351,7 +352,7 @@
 	(template-desugar 
 			desugar-quote
 			(match root
-				(('quote (datums ... ) )
+				( ('quote (datums ... ) )
 					`(list  ,@(map (lambda(datum) `(quote ,(desugar-quote datum)) ) datums)))
 				(_ root))))	
 
@@ -1111,12 +1112,12 @@
 	(template-desugar 
 		desugar-lambda
 		(match root
-			; ( ('lambda (formals ... ) exprs ... expr )
-			; 	;set return result for each line (until figure out analysis to find last call)
-			; 	`(lambda ,formals ,@exprs  ,`(return ,expr)  ))
-			( ('lambda (formals ... ) exprs ... )
+			( ('lambda (formals ... ) exprs ... expr )
 				;set return result for each line (until figure out analysis to find last call)
-				`(lambda ,formals ,@(map (lambda(expr) `(return ,expr) ) exprs  )))
+				`(lambda ,formals ,@exprs  ,`(return ,expr)  ))
+			; ( ('lambda (formals ... ) exprs ... )
+			; 	;set return result for each line (until figure out analysis to find last call)
+			; 	`(lambda ,formals ,@(map (lambda(expr) `(return ,expr) ) exprs  )))
 			(_ root))))
 
 
@@ -1138,13 +1139,13 @@
 				;if if stmt append return to then and else,
 				; otherwise just return
 				(match expr
-					( ('if test then) 
-						`(if ,test 
-							,(desugar-return `(return ,then)) ))
-					( ('if test then else) 
-						`(if ,test 
-							,(desugar-return `(return ,then) ) 
-							,(desugar-return `(return ,else) )))
+					; ( ('if test then) 
+					; 	`(if ,test 
+					; 		,(desugar-return `(return ,then)) ))
+					; ( ('if test then else) 
+					; 	`(if ,test 
+					; 		,(desugar-return `(return ,then) ) 
+					; 		,(desugar-return `(return ,else) )))
 					(_ root)))
 			;if symbol is found
 			(_ root))))
@@ -1189,6 +1190,34 @@
 				'__empty_list__)  
 			;if symbol is found
 			(_ root))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; desugar-if
+;---------------------------------------------------------------------------------------------;
+; Translates (if test true_expr else_expr ) = (__eval_if__  (lambda()test) (lambda()then_expr) (lambda()else_expr)  ) 
+;---------------------------------------------------------------------------------------------;
+;	params:
+;		root : lambda-expr
+;	return:
+;		last expr		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (desugar-if root)
+	(template-desugar 
+		desugar-if
+		(match root
+			(('if test then_expr else_expr )
+				`(__eval_if__  ,`(lambda () ,test  )
+								,`(lambda () ,then_expr  )
+								,`(lambda () ,else_expr  )))
+			(('if test then_expr  )
+				`(__eval_if__  ,`(lambda () ,test  )
+								,`(lambda () ,then_expr  )
+								,`(lambda () false ))) 
+			;if symbol is found
+			(_ root))))
+
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;WIP;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

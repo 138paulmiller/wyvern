@@ -14,7 +14,8 @@ Chicken Scheme, with r7rs and mathable extensions
 This will generate a javascript file out.js in the calling directory. 
 Beforewarned, as of now the javascript is very messy, and nearly unreadable.
 
-#### Supports
+#### Supports 
+Desugaring well tested, could always use more. However, generated Javascript NOT rigoursly tested, backend needs cleaning up first! 
 - cond			
 - case 						
 - and 				
@@ -23,7 +24,7 @@ Beforewarned, as of now the javascript is very messy, and nearly unreadable.
 - unless 			
 - let     			
 - let*    			
-- letrec  			
+- letrec  		
 - letrec*  			
 - let-values  		
 - let*-values 		
@@ -37,6 +38,8 @@ Beforewarned, as of now the javascript is very messy, and nearly unreadable.
 - unquote-splicing
 - tail call optimization 
 
+##### TODO
+- [ ] Convert nested function generation into top-level referenced functions   
 
 ##### Future 
 
