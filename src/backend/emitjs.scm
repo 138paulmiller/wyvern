@@ -60,8 +60,6 @@
 
 (define (emitjs body filename)
 	(display body)
-	(display"ValueS:")
-	(newline)
 	(let ((source (string-append (compile-primitives) (compile-values) (compile-body body) )))
 		
 		(display source (if filename (open-output-file filename) (current-output-port) ))
@@ -84,6 +82,8 @@
 "const err = function(msg){ console.log(\"ERROR\"+msg);  };
 const display = function(a){ return console.log(a);  };
 const __empty_list__ = null;
+
+const quote  = function(a){return [a]; };
 const cons  = function(a, b){var l = [a]; if(b != null) l = l.concat(b); return l;};
 const car  = function(a){if(a==__empty_list__) return err(\"Cannot car empty list\"); else return a[0];};
 const cdr  = function(a){if(a==__empty_list__) return err(\"Cannot cdr empty list\"); else return a.splice(1);};
@@ -96,17 +96,30 @@ const __lt__  = function(a, b){return a<b;};
 const __lte__  = function(a, b){return a<=b;};
 const __gt__  = function(a, b){return a>b;};
 const __gte__  = function(a, b){return a>=b;};
-const __ate__  = function(a, b){return a==b;};
-const __ste__  = function(a, b){return a===b;};
+const __aeq__  = function(a, b){return a==b;};
+const __seq__  = function(a, b){return a===b;};
 const __eq__  = function(a, b){return _.isEqual(a,b);};
 const __eqv__  = function(a, b){return _.isEqual(a,b);};
 const and  = function(a, b){if(a&&b) return b; else return false;};
 const or  = function(a, b){if(a) return a; else if(b) return b; else return false;};
 
+//JS to HTML Helper
+
+const getElementById = function(a) {return document.getElementById(a);};
+const getInnerHTML = function(a) {return a.innerHTML;};
+const setInnerHTML = function(a,b) {return a.innerHTML = b;};
+const string = String;
+
 const __make_value__  = function(n, value_list){return value_list;};
 const __get_value__  = function(i, value){if(value!=null)return value[i-1];};
-//trampoline for functions 
 
+const __eval_if__  = function(test_thunk, then_thunk, else_thunk)
+					{if (test_thunk() != false) 
+						return then_thunk(); 
+					else 
+						return else_thunk();};
+
+//trampoline for functions 
 function __call__(func) {
   while(func && typeof func === 'function') {
     func = func()
@@ -143,6 +156,8 @@ function __call__(func) {
 				(compile-return expr))
 			( ('define sym expr) 
 				(compile-define sym expr))
+			( ('set! sym expr) 
+				(compile-set! sym expr))
 			;check if application after special forms
 			( ( args ... )
 					(compile-proc (car args) (cdr args)))
@@ -153,6 +168,8 @@ function __call__(func) {
 					((number? expr) (number->string expr))
 					((symbol? expr) (symbol->string expr))
 					((string? expr) expr)
+					((boolean? expr) (if expr "true" "false"))
+
 					(else 
 						(if (pair? expr)
 							(string-append 
@@ -196,9 +213,10 @@ function __call__(func) {
 				(cdr args)))
 			(string-append 
 				"__call__(function(){ \nreturn " js-proc 
-					"(" js-args")"
+					"(" js-args ")"
 				"})"
-			)))
+			)
+			))
 
 
 (define (compile-return expr)
@@ -207,6 +225,9 @@ function __call__(func) {
 
 (define (compile-define sym expr)
 	(string-append "\nvar " (symbol->string sym) " =" (compile-expr expr)))
+	
+(define (compile-set! sym expr)
+	(string-append "\n" (symbol->string sym) " =" (compile-expr expr)))	
 
 (define (compile-if test then else)	
 		(string-append "\nif(" (compile-expr test) "){" 
